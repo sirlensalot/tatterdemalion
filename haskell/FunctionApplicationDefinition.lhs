@@ -1,4 +1,4 @@
-% Chapter 1: Function Application and Definition
+% Function Application and Definition
 % Stuart Popejoy
 % November 2014
 
