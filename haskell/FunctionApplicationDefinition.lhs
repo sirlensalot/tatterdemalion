@@ -165,9 +165,11 @@ itself.
 
 Let's use the Haskell interpreter to see what type `x` is. If you have
 ghci, the Haskell REPL, up and running, you can issue `let x = 1` to
-follow along. Alternately, you can download the source of this
-article, which is "literate haskell" and therefore can be loaded up in
-your interpreter with the ":load" command, and just reference `x` directly.
+follow along. Alternately, you can [download the
+source](https://raw.githubusercontent.com/slpopejoy/tatterdemalion/master/haskell/FunctionApplicationDefinition.lhs
+"Article source") of this article, which is "literate haskell" and
+therefore can be loaded up in your interpreter with the ":load"
+command, and just reference `x` directly.
 
 We ask ghci using the `:t` command:
 
@@ -297,8 +299,7 @@ to output, we can imagine the argument "indexing" the output. Indeed
 Perl. The arrow dividing the argument from the result type is the
 *[function type
 constructor](http://www.haskell.org/haskellwiki/Keywords#-.3E
-"Keywords: ->")*, which you'll be seeing a lot, given that functional
-programming languages are all about functions.
+"Keywords: ->")*, which we'll be seeing a lot.
 
 A binary (two-argument) function can also be thought of as a mapping
 or indexing operation, but in two dimensions. Here's a binary
@@ -309,7 +310,7 @@ function:
 
 This is when the type signatures stop looking like anything you've
 seen in an imperative language. The type signature is growing to the
-left, with arrows dividing the arguments *and the result type*. Here's
+left, with arrows dividing the arguments *and* delimiting the argument from the result type. Here's
 an example with different types to make the positions clearer:
 
 > lengthIsDivisible :: String -> Int -> Bool
@@ -321,7 +322,7 @@ argument.
 
 Let's compare the signatures so far:
 
-````
+````haskell
 y              ::               Int
 unaryFunction  ::        Int -> Int
 binaryFunction :: Int -> Int -> Int
@@ -329,9 +330,7 @@ binaryFunction :: Int -> Int -> Int
 
 Note the consistency and simplicity. It's admirable, beautiful, maybe
 confusing at first. But it's no accident that the syntax is unified,
-as we'll soon see.
-
-Enough defining, let's CALL some of these suckers!
+as we'll soon see. 
 
 Invoking functions with arguments
 ---------------------------------
@@ -351,8 +350,9 @@ binaryFunction 2 unaryFunction 3  <=== bzzt
 ```
 
 This doesn't work. The compiler thinks "unaryFunction" is an argument
-all by itself, and it's the wrong type, and `3` is too many
-arguments. The problem is solved with parentheses.
+all by itself, of the wrong type; plus '3' is now a third argument and
+`binaryFunction` only takes two. The problem is solved with
+parentheses.
 
 > invokeParens = binaryFunction 2 (unaryFunction 3)
 
@@ -388,7 +388,7 @@ This is perhaps a "cleaner" version. Everything after the `$` is
 
 We could leave it at that, and marvel at Haskell's flexible syntax.
 But let's look deeper. A common mistake is to think that `$` is a
-keyword, or syntax at the lexer level. In reality it's nothing more
+keyword, or lexical syntax. In reality it's nothing more
 than a library function.
 
 Let's ask ghci for its type. To do so, GHCI requires use to put
@@ -418,11 +418,11 @@ what's going on? What about the type signature?
 
 Uh-oh. Don't worry, we'll explicate all of this in due time. For now
 suffice it to say that **($) is a function that takes two arguments: a
-unary function to be applied, and its first argument**. `(a -> b)` is
-the first argument, and you can see it looks like a one-argument
-function; "-> a" is the second argument, and " -> b" is the return
-type. The lowercase letters indicate the function is *polymorphic* --
-we'll get to that later.
+unary function to be applied, and its first argument**. "`(a -> b)`"
+is the first argument, and you can see it looks like a one-argument
+function; "`-> a`" is the second argument, and "`-> b`" is the return
+type. The lowercase letters indicate the function is *polymorphic*,
+which we'll gloss over for now to say that they take any type.
 
 `$` takes a unary function and it's argument. Let's try it on just a unary function:
 
@@ -519,7 +519,7 @@ intAdd 2 3 :: Int
 "intAdd 2 3" *fully applies* `intAdd` to derive a nullary function
 that returns 5. Full application is lazy too: you can "load up" a
 function with all of its arguments and pass it into another function
-to be evaluated later, if at all, for instance as an "event" ready to
+to be evaluated later, for instance as an "event" ready to
 dispatch.
 
 Partial Application and ($)
@@ -668,13 +668,10 @@ function*.
 
 Function application happens one argument at a time: each argument
 when applied creates a new function which is then applied to the next
-argument. Students of the Lambda Calculus should recognize this
-procedure.
-
-A function applied to less arguments than specified in its definition
-is *partially applied*, resulting in a new function with however many
-arguments are left. A function with all of its arguments applied is
-*fully applied*. 
+argument. A function applied to less arguments than specified in its
+definition is *partially applied*, resulting in a new function with
+however many arguments are left. A function with all of its arguments
+applied is *fully applied*.
 
 Because Haskell is a *lazy* language, there is no difference between a
 fully- or partially-applied function: a fully-applied function is not
