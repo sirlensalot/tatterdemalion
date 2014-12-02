@@ -140,38 +140,33 @@ immutability, purity and encapsulation.
 Definitions in Haskell
 ======================
 
-Haskell is designed from the ground up to be pure and lazy. As a
-direct consequence, it has no need for assignment, instead striving to
-make *definition* as elegant and simple as possible.
-
-With assignment out of the way, Haskell can reclaim the equals sign
-for [definition](http://www.haskell.org/haskellwiki/Keywords#.3D "Keywords:
-="). When we write
+In Haskell, we can write
 
 > x = 1
 
+and we end up with something altogether different than the options
+we had in C or Java. The syntax looks like variable assignment --
+`int x = 1;` -- but in fact we've defined something akin to our
+nullary function above -- `int x() { return 1; }`.
 
-we are **not** assigning a variable called "x": instead, we are
-*defining* `x` to be the value `1`. The definition operates similarly
-to our nullary function `y()` above: we can define it before or after
-calling code with no impact on execution; it's pure and immutable; it
-encapsulates the value.
+In truth, it's neither: this is a definition that binds the symbol `x`
+to a constant value `1`. Formally, it's a *closed expression*, not a
+function. Nonetheless, it gives us everything we were looking for with
+our nullary functions above: 
 
-`x` is not a nullary function, however, as such things don't really
-exist in functional languages. Sometimes imperative terminology
-distinguishes a "function" from a "subroutine" if it returns a value,
-but this is only meaningful if a "subroutine" can mutate state via
-side-effects. In a pure language, a function with no arguments 
-is not a function, but just some code that always returns the same
-value, and is thus a constant. 
+* we can use it anywhere we like, independent of where/when we declared it
 
-Nonetheless, thinking of `x` as a nullary function can be helpful
-to "unlearn" the imperative assumption of `=` indicating variable assignment.
-If every time you see `=`, you think "I'm defining a function" instead
-of "I'm assigning a variable", you'll be well on your way to understanding
-Haskell code.
+* We can't reassign or redefine it; it's a permanent, immutable definition
 
-In Haskell, the equals operator always *defines*, it never *assigns*. 
+* We can change how we arrive at its value, e.g. `x = 2 + 3 - 4`, without impacting client code.
+
+Informally, we can think of this as a nullary function, and for 
+imperative programmers, this can be helpful, to "unlearn" our instincts to
+see an expression like `x = 1` as variable assignment. As we'll see
+below, "real" functions with arguments are defined using the same syntax, so
+it's not terribly inaccurate to just see this as a definition of a nullary function.
+
+When you see `=`, think "I'm defining a function" instead of "I'm assigning a variable".
 
 Type Inference
 --------------
@@ -203,7 +198,7 @@ x :: Num a => a
 
 Huh? That's more complicated than `int y()`! We'll defer a deep-dive
 on Haskell's type system, and summarize that this means `x`'s type
-involves `Num`eric types. Unlike many languages, Haskell doesn't
+involves `Num`-eric types. Unlike many languages, Haskell doesn't
 assume the literal `1` always indicates an integer type!
 
 Type Signatures
@@ -215,8 +210,9 @@ we'll provide a **type signature** for our top-level definitions:
 > y :: Int
 > y = 2
 
-Now we've got a definition of `y` that evaluates to the integer value `2`, with
-a much simpler type, as reflected in ghci:
+Here, we've defined `y` to return the constant value `2`, and given
+it a type signature that fixes the type to `Int`. When we ask ghci,
+we get a much simpler answer:
 
 ~~~~
 ghci> :t y
@@ -224,10 +220,10 @@ y :: Int
 ~~~~
 
 
-Invoking Definitions
---------------------
+Invoking functions
+------------------
 
-When the time comes to use these definitions, Haskell offers a
+When the time comes to use these expressions, Haskell offers a
 much cleaner syntax, with no parentheses required. Below
 are the Haskell versions of our imperative code above:
 
@@ -237,7 +233,7 @@ are the Haskell versions of our imperative code above:
 >              x /= y                -- (in)equality
 >             )
 
-Note that this example is executable Haskell code. To do so, I've
+Note: this example is executable Haskell code. To do so, I've
 encased the examples in the dummy function `someTests`. I didn't bother
 to provide a type signature for it, as the type is not relevant.
 The reader can figure out the type as an exercise, or ask ghci.
@@ -245,8 +241,8 @@ The reader can figure out the type as an exercise, or ask ghci.
 Local Scope
 -----------
 
-We talked about how we'd like to have local definitions, not just 
-top-level. Haskell has us covered: 
+We talked about how nice it would be to declare functions in local scope. In 
+Haskell we have all the same tools for local definition as we do at top level: 
 
 > localWithWhere = y * 30 + y ^ 2
 >                  where y = 3
@@ -266,12 +262,12 @@ You can also use ["let" and "in"](http://www.haskell.org/haskellwiki/Keywords#le
 
 This is more familiar to the imperative idiom, in that something that
 looks like a variable is defined before the consuming code. I
-recommend imperative programmers stick with `where` to get used to it, but
-otherwise it's a matter of style: `where` allows you to put the high-level
-functionality first, followed by details; `let`/`in` is maybe clearer
-in some situations.
+recommend imperative programmers stick with `where`, since it looks
+the least like imperative assignment. Otherwise, it's a matter of
+style: `where` allows you to put the high-level functionality first,
+followed by details; `let`/`in` is maybe clearer in some situations.
 
-Local definitions can have type signatures:
+Local definitions can have type signatures, too:
 
 > localWithTypeDecl :: Int
 > localWithTypeDecl = y * 30 + y ^ 2 
@@ -285,17 +281,14 @@ code *easier* to read. The type signature for `y` above is simply
 verbose: it's clear from the top-level type that we're dealing with
 `Int` values.
 
-What's great is that Haskell gives you all the same tools for 
-definition and type specification at any scope.
-
 
 Arguments and Application
 =========================
 
-We've focused on simple definitions, to show their affinity to
-the nullary functions of the imperative world. Now let's look
-at the real functions of functional programming, that is, 
-functions with arguments.
+We've happily dispensed with variable assignment, with Haskell providing
+us a clean and powerful syntax for defining expressions. It's now time
+to look at "real" functions, those things that have arguments, and see
+how we define and invoke them.
 
 Unary and Binary functions
 --------------------------
@@ -363,10 +356,9 @@ other functions, we'll need some more syntax. Let's try calling
 binaryFunction 2 unaryFunction 3  <=== bzzt
 ```
 
-This doesn't work. The compiler thinks "unaryFunction" is an argument
-all by itself, of the wrong type; plus '3' is now a third argument and
-`binaryFunction` only takes two. The problem is solved with
-parentheses.
+This doesn't work: the compiler can't distinguish what's an argument 
+from what's a function invocation. We'll need to clear things up
+with parentheses.
 
 > invokeParens = binaryFunction 2 (unaryFunction 3)
 
@@ -383,7 +375,7 @@ looking something like this:
 > binaryFunctionSubstituted = 2 * (unaryFunction 3) + 2
 
 `x` becomes 2, and `y` becomes `(unaryFunction 3)`. With this
-substitution, we now have a *new function* which Haskell will evaluate
+substitution, we now have a *new expression*, which Haskell will evaluate
 lazily when the results become needed.
 
 
@@ -397,13 +389,15 @@ Here's how we can write the code above without parentheses:
 
 > invokeAppOp = binaryFunction 2 $ unaryFunction 3
 
-This is perhaps a "cleaner" version. Everything after the `$` is
-"bunched together" as the second argument to `binaryFunction`.
+This looks nice. Everything after the `$` is "bunched together" as the
+second argument to `binaryFunction`. It has the same meaning as
+`binaryFunction 2 (unaryFunction 3)` but with a sweet functional
+look. 
 
 We could leave it at that, and marvel at Haskell's flexible syntax.
 But let's look deeper. A common mistake is to think that `$` is a
-keyword, or lexical syntax. In reality it's nothing more
-than a library function.
+keyword, or lexical syntax. In reality it's nothing more than a
+library function.
 
 Let's ask ghci for its type. To do so, GHCI requires use to put
 parentheses around `$`:
@@ -521,7 +515,7 @@ intAdd 2 :: Int -> Int
 Partial application operates hand-in-hand with substitution. Recall
 above how supplying `unaryFunction 2` to another function, created a
 new function with `unaryFunction 2` stitched into it. The idea here is
-that **full application is no different from partial
+that **"full" application is no different from partial
 application**:
 
 ````
@@ -550,9 +544,8 @@ binaryFunction 2 :: Int -> Int
 ````
 
 Finally, we've unpacked how `$` does its magic: it simply relies on
-partial application. And indeed, there's no magic: `binaryFunction 2 $
-unaryFunction 3` can be written entirely with parentheses to make the
-partial application clear:
+normal function application. `binaryFunction 2 $ unaryFunction 3` can
+be written entirely with parentheses to make this clear:
 
 > invokePartialParens = (binaryFunction 2) (unaryFunction 3)
 
@@ -664,6 +657,7 @@ values. The point is not to "hide" arguments, but to ramp up the
 expressiveness of the language to fully exploit the power of
 functions.
 
+
 Review
 ======
 
@@ -683,8 +677,7 @@ Function application happens one argument at a time: each argument
 when applied creates a new function which is then applied to the next
 argument. A function applied to less arguments than specified in its
 definition is *partially applied*, resulting in a new function with
-however many arguments are left. A function with all of its arguments
-applied is *fully applied*.
+however many arguments are left. 
 
 Because Haskell is a *lazy* language, there is no difference between a
 fully- or partially-applied function: a fully-applied function is not
