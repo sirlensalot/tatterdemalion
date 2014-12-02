@@ -2,6 +2,10 @@
 % Stuart Popejoy
 % November 2014
 
+*Author's Note: this article is the first of a series introducing Haskell
+to experienced programmers, building up language fundamentals, and unlearning
+assumptions from the imperative world.* 
+
 In this article, we'll take a close look at functions, namely how we
 call them -- function *application* -- and how we define them.
 
@@ -126,29 +130,48 @@ So we have to throw in the towel on functionalizing our imperative
 languages. But we've learned what we want to see in another language
 to get us there:
 
-* We want to invoke functions instead of referencing variables for
+* We want to avoid referencing variables, preferring functions for
 immutability, purity and encapsulation.
 
 * We want to define functions easily in any scope.
 
-* We want argument substition instead of eager evaluation.
+* We want argument substitution instead of eager evaluation.
 
-Function Definition in Haskell
-==============================
+Definitions in Haskell
+======================
 
 Haskell is designed from the ground up to be pure and lazy. As a
 direct consequence, it has no need for assignment, instead striving to
-make function definition as elegant and simple as possible.
+make *definition* as elegant and simple as possible.
 
-With assingment out of the way, Haskell can reclaim the equals sign
-for [function
-definition](http://www.haskell.org/haskellwiki/Keywords#.3D "Keywords:
+With assignment out of the way, Haskell can reclaim the equals sign
+for [definition](http://www.haskell.org/haskellwiki/Keywords#.3D "Keywords:
 ="). When we write
 
 > x = 1
 
-we declare a nullary function `x` that represents `1`. *We are not
-assigning x to 1*, but defining a function, just like `y()` above. 
+
+we are **not** assigning a variable called "x": instead, we are
+*defining* `x` to be the value `1`. The definition operates similarly
+to our nullary function `y()` above: we can define it before or after
+calling code with no impact on execution; it's pure and immutable; it
+encapsulates the value.
+
+`x` is not a nullary function, however, as such things don't really
+exist in functional languages. Sometimes imperative terminology
+distinguishes a "function" from a "subroutine" if it returns a value,
+but this is only meaningful if a "subroutine" can mutate state via
+side-effects. In a pure language, a function with no arguments 
+is not a function, but just some code that always returns the same
+value, and is thus a constant. 
+
+Nonetheless, thinking of `x` as a nullary function can be helpful
+to "unlearn" the imperative assumption of `=` indicating variable assignment.
+If every time you see `=`, you think "I'm defining a function" instead
+of "I'm assigning a variable", you'll be well on your way to understanding
+Haskell code.
+
+In Haskell, the equals operator always *defines*, it never *assigns*. 
 
 Type Inference
 --------------
@@ -187,12 +210,12 @@ Type Signatures
 ---------------
 
 To keep things simple, and because it's generally good practice,
-we'll provide a **type signature** for our top-level functions:
+we'll provide a **type signature** for our top-level definitions:
 
 > y :: Int
 > y = 2
 
-Now we've got a function that evaluates to the integer value `2`, with
+Now we've got a definition of `y` that evaluates to the integer value `2`, with
 a much simpler type, as reflected in ghci:
 
 ~~~~
@@ -200,16 +223,13 @@ ghci> :t y
 y :: Int
 ~~~~
 
-So a reminder: in Haskell, `=` is fundamentally different than in
-imperative languages: it always defines a function, it never assigns a
-value.
 
-Calling Nullary Functions
--------------------------
+Invoking Definitions
+--------------------
 
-When the time comes to invoke our nullary functions, Haskell offers a
-much cleaner syntax, with no dots or pesky parentheses required. Below
-is the Haskell versions of our imperative code above:
+When the time comes to use these definitions, Haskell offers a
+much cleaner syntax, with no parentheses required. Below
+are the Haskell versions of our imperative code above:
 
 > someTests = ( 
 >              (x + 3) == 4,         -- addition
@@ -225,19 +245,19 @@ The reader can figure out the type as an exercise, or ask ghci.
 Local Scope
 -----------
 
-We talked about how we'd like to define functions locally, not just at
+We talked about how we'd like to have local definitions, not just 
 top-level. Haskell has us covered: 
 
 > localWithWhere = y * 30 + y ^ 2
 >                  where y = 3
 
-Here, we've defined a function `y` to be used twice in the outer function body.
+Here, we've defined `y` to be used twice in the outer function body.
 The `where` [keyword](http://www.haskell.org/haskellwiki/Keywords#where "Keywords: where") 
-starts a block of code for defining functions in local scope. 
+starts a block of code for definitions in local scope. 
 
-Note that this article's code already has a definition of `y` at the top level, above.
-Haskell allows declaring functions with the same name in local scope, which will
-override the top-level definition. This is called *shadowing* the top-level declaration.
+Note that this article's code has already defined of `y` at the top level, above.
+Haskell allows definitions with the same name in local scope, which will
+override the top-level definition. This is called *shadowing* the top-level definition.
 
 You can also use ["let" and "in"](http://www.haskell.org/haskellwiki/Keywords#let "Keywords: let"):
 
@@ -251,7 +271,7 @@ otherwise it's a matter of style: `where` allows you to put the high-level
 functionality first, followed by details; `let`/`in` is maybe clearer
 in some situations.
 
-Local functions can have type signatures:
+Local definitions can have type signatures:
 
 > localWithTypeDecl :: Int
 > localWithTypeDecl = y * 30 + y ^ 2 
@@ -265,23 +285,17 @@ code *easier* to read. The type signature for `y` above is simply
 verbose: it's clear from the top-level type that we're dealing with
 `Int` values.
 
-What's great is that Haskell gives you all the same tools for function
-definition and specification at any scope.
+What's great is that Haskell gives you all the same tools for 
+definition and type specification at any scope.
 
 
 Arguments and Application
 =========================
 
-Nullary functions are funny inhabitants in the universe of functions.
-In side-effect-happy languages, you might make some "subroutines" just
-to break up some spaghetti code. Here, our nullary functions have been
-little more than stand-ins for literals. Even when a no-arg function
-returns a more complex type, it's more or less just a constructor or
-"factory method".
-
-Pretty boring compared to action-packed argument-having functions,
-right? Maybe not; in Haskell, functions of all "arities" are fundamentally 
-related to each other. 
+We've focused on simple definitions, to show their affinity to
+the nullary functions of the imperative world. Now let's look
+at the real functions of functional programming, that is, 
+functions with arguments.
 
 Unary and Binary functions
 --------------------------
@@ -462,7 +476,7 @@ let's define integer addition as a function:
 > intAdd :: Int -> Int -> Int
 > intAdd x y = x + y
 
-We can invoke this the usual way, `intAdd 2 3` will evaulate to
+We can invoke this the usual way, `intAdd 2 3` will evaluate to
 `5`. If we only provide the first argument, though, we'll create a
 new, unary function:
 
@@ -508,16 +522,15 @@ Partial application operates hand-in-hand with substitution. Recall
 above how supplying `unaryFunction 2` to another function, created a
 new function with `unaryFunction 2` stitched into it. The idea here is
 that **full application is no different from partial
-application**. Fully-applying a function *still* creates another
-function! Otherwise substitution wouldn't work.
+application**:
 
 ````
 ghci> :t intAdd 2 3
 intAdd 2 3 :: Int
 ````
 
-"intAdd 2 3" *fully applies* `intAdd` to derive a nullary function
-that returns 5. Full application is lazy too: you can "load up" a
+"intAdd 2 3" *fully applies* `intAdd` to derive a *lazy computation*
+that returns 5. Full application is useful in a lazy context, in that you can "load up" a
 function with all of its arguments and pass it into another function
 to be evaluated later, for instance as an "event" ready to
 dispatch.
@@ -654,10 +667,10 @@ functions.
 Review
 ======
 
-Haskell is a *pure* language where the function is the fundamental
-atom around which all code is built. Pure means that a function's
-output is always determined by its inputs, which implies that no funny
-business can go on in the function body: we can't do IO, assign fields
+Haskell is a *pure* language, meaning that a computation's
+output is always determined by its inputs. This implies
+that no funny business can go on inside of a function body or
+definition: we can't do IO, assign fields
 or global variables, or make system calls.
 
 As a consequence of purity, Haskell does not *eagerly evaluate*
