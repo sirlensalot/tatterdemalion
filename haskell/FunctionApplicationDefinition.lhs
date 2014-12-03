@@ -329,11 +329,11 @@ argument.
 
 Let's compare the signatures so far:
 
-````haskell
+~~~~haskell
 y              ::               Int
 unaryFunction  ::        Int -> Int
 binaryFunction :: Int -> Int -> Int
-````
+~~~~
 
 Note the consistency and simplicity. It's admirable, beautiful, maybe
 confusing at first. But it's no accident that the syntax is unified,
@@ -402,27 +402,27 @@ library function.
 Let's ask ghci for its type. To do so, GHCI requires use to put
 parentheses around `$`:
 
-````
+~~~~
 ghci> :t ($)
 ($) :: (a -> b) -> a -> b
-````
+~~~~
 
 This shows it's a normal function, since you can't ask for the type of
 keywords and syntax:
 
-````
+~~~~
 ghci> :t (=)
 <interactive>:1:2: parse error on input ‘=’
-````
+~~~~
 
 `$` is just a function, but it's pretty cool that we can drop it
 in instead of parentheses! Most languages don't allow you to
 arbitrarily replace argument delimiters with library functions. So
 what's going on? What about the type signature?
 
-````
+~~~~
 ($) :: (a -> b) -> a -> b
-````
+~~~~
 
 Uh-oh. Don't worry, we'll explicate all of this in due time. For now
 suffice it to say that **($) is a function that takes two arguments: a
@@ -479,12 +479,12 @@ new, unary function:
 This compiles, and as promised, `intAddPartial` is a unary function
 that always adds `2` to its value. Let's play with it in GHCI:
 
-````
+~~~~
 ghci> :t intAddPartial
 intAddPartial :: Int -> Int
 ghci> intAddPartial 3
 5
-````
+~~~~
 
 Partial application shows up in many functional-ish languages, but
 it's often presented as "something special", distinct from everyday
@@ -497,20 +497,20 @@ were getting at: the unity of the type signatures matches the unity of
 partial- and full-application. Let's compare `intAdd` and
 `intAddPartial`'s signatures:
 
-````haskell
+~~~~haskell
     intAdd        :: Int -> Int -> Int
     intAddPartial ::        Int -> Int
-````
+~~~~
 
 We can visually see that first argument being "bundled" into the
 partially-applied version. In Haskell, partial application is as
 simple as leaving off an argument, resulting in a new function that
 takes one less argument. Let's ask GHCI:
 
-````
+~~~~
 ghci> :t intAdd 2
 intAdd 2 :: Int -> Int
-````
+~~~~
 
 Partial application operates hand-in-hand with substitution. Recall
 above how supplying `unaryFunction 2` to another function, created a
@@ -518,10 +518,10 @@ new function with `unaryFunction 2` stitched into it. The idea here is
 that **"full" application is no different from partial
 application**:
 
-````
+~~~~
 ghci> :t intAdd 2 3
 intAdd 2 3 :: Int
-````
+~~~~
 
 "intAdd 2 3" *fully applies* `intAdd` to derive a *lazy computation*
 that returns 5. Full application is useful in a lazy context, in that you can "load up" a
@@ -538,10 +538,10 @@ above. Our prefix rewrite resulted in `($) (binaryFunction 2)
 by itself means: `binaryFunction` partially-applied to 2, creating a
 new function:
 
-````
+~~~~
 ghci> :t binaryFunction 2
 binaryFunction 2 :: Int -> Int
-````
+~~~~
 
 Finally, we've unpacked how `$` does its magic: it simply relies on
 normal function application. `binaryFunction 2 $ unaryFunction 3` can
@@ -553,16 +553,16 @@ And indeed, the definition of `($)` is nothing but [function application
 itself](http://hackage.haskell.org/package/base-4.7.0.1/docs/src/GHC-Base.html#%24
 "GHC/Base.lhs"):
 
-````haskell
+~~~~haskell
     ($)             :: (a -> b) -> a -> b
     f $ x           =  f x
-````
+~~~~
 
 There you have it: `f $ x` just calls `f x`. Further up the source file, we also see
 
-````haskell
+~~~~haskell
 infixr 0  $
-````
+~~~~
 
 which establishes `$` as a right-infix function with precedence
 0. It's trivially easy in Haskell to declare new "operators" this way,
@@ -575,9 +575,9 @@ Functions as Values
 
 Recall our use of `($)` on a unary function above:
 
-```
+~~~~
 ($) unaryFunction 3
-```
+~~~~
 
 There's something curious here: `unaryFunction` *looks* like it's
 being applied to `3`, but instead it's an argument to the `($)`
@@ -596,21 +596,21 @@ No problem: we're assigning `ufAlias` to the value `unaryFunction`,
 which happens to be of type `Int -> Int`. We can now use it just like
 `unaryFunction`:
 
-```
+~~~~
 ghci> ufAlias 1
 5
-```
+~~~~
 
 This seems simple enough, until you notice *we've just defined a unary
 function without ever mentioning the argument!* In most languages,
 this is impossible: you have to restate your argument definitions over
 and over. Here's some equivalent C code:
 
-```java
+~~~~java
 public int add1(int x) { return x + 1; }
 
 public int aliasAdd1(int x) { return add1(x); }
-```
+~~~~
 
 Of course, nothing is stopping us from restating the arguments:
 
