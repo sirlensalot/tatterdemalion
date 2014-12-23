@@ -50,7 +50,7 @@ This code compiles fine, which you can try yourself using the [source](https://r
 So far, `type` isn't buying us much, but that's because we're only
 scratching the surface. Consider this type synonym:
 
-> type StringIntTuple = (String, String)
+> type StringIntTuple = (String, Int)
 
 `StringTuple` is a synonym for a "2-tuple" of String and Int. It's just like our
 synonyms above, identical in usage to a bare tuple:
