@@ -6,8 +6,8 @@ This article seeks to give a whirlwind tour of basic type signatures
 in Haskell. Types are pretty important in Haskell so it's good to
 make sure you understand the basics.
 
-This is yet another "literal haskell" article, meaning the examples
-are executable code, and meaning I have to put imports at the top. 
+This is another "literate haskell" article, meaning that the examples
+are executable code, and that I have to put imports at the top. 
 So here goes:
 
 > import Data.Set (Set, fromList)
@@ -93,18 +93,18 @@ List also has special support in pattern-matches:
 Pattern-matching captures information about how the value is
 constructed. Remember, in an immutable language, once a value is 
 constructed, it never changes, so this is a valid test. Here, `[]` means "the empty list",
-`(s:_)` matches on the head:tail construction of this type, which is
-a singly-linked list in the LISP model. The wildcard underscores both
-avoid capturing the values in a variable, and matches any constructor.
+`(s:_)` matches on the (head:tail) construction of this type, which is
+a singly-linked list in the LISP model. The underscores serve to wildcard
+match on any constructor, and to avoid creating unused variable bindings.
 Pattern-matching works downward from the first match, so the last match 
-of '_ _' matches anything that wasn't captured above.
+of `_ _` matches anything that wasn't captured above.
 
 
 Less-simple types
 =================
 
 The list type is more complex than `Person` or `Int`: it's a
-type that must have another type specified to be useable. A similar
+type that must have *another type* specified to be useable. A similar
 type is `Set`, although it doesn't have special syntax:
 
 > setOfNames :: Set String
@@ -207,6 +207,8 @@ side will be supplied to the type declaration on the right.
 This function converts a `PersonMap` of unknown key type to a map where
 the keys are the lengths of the contained lists. We use `toList` and `fromList`
 to convert the `Map` to a list of tuples, which we transform in `txform`.
+
+
 Tuples are another type in Haskell with special syntax, as the signature 
 of `toList` shows:
 ```
@@ -238,8 +240,10 @@ outside of the type system. Not so in Haskell; *all of our function
 declarations are themselves types.*
 
 For example, our function above, `isTeen`, is a unary function
-returning a boolean: `Person -> Bool`. `isTeen` *is of the type*
-`Person -> Bool`.  To illustrate, we can make a type synonym for it,
+returning a boolean: `Person -> Bool`. The type of `isTeen` is the
+entire declaration `Person -> Bool`, not just the word-like things.  
+
+To illustrate, we can make a type synonym for `isTeen`'s type,
 with a reasonably obvious name:
 
 > type PersonPredicate = Person -> Bool
@@ -282,7 +286,7 @@ Kinds
 We'll finish this introduction to type signatures with a quick discussion
 of "kinds" in Haskell. We've talked about types that don't need any other 
 types, like `Int`; types that need one other type, like `Set` or list; and
-types that need two, like 'Map', or the unary function type `(->)`. 
+types that need two, like `Map` or the unary function type `(->)`. 
 
 In Haskell, this cardinality is expressed via "kinds", which have a funny
 function-like syntax. We can find out the kind of a type with the ":k" command
