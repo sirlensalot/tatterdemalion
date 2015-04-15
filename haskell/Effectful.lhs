@@ -26,7 +26,7 @@ This article will offer a breadcrumb trail to follow in pursuit of
 1. Actual side-effects (IO)
 2. Stuff that seems like side-effects (e.g. State, Writer)
 3. A "computational environment" that persists through various function calls (e.g. Reader)
-4. Non-local control flow (Maybe, Either). Not an effect necessarily, but magical nonetheless.
+4. Non-local control flow (Maybe, Either). 
 
 This means using types that implement the `Functor` ==> `Applicative`
 ==> `Monad` typeclass hierarchy, and managing the complexity that can
@@ -52,7 +52,7 @@ if you're really lazy.
 Functions with the famous type signature `IO ()` have zero functional mojo.
 `()` is the empty type, meaning the function return nothing:
 you run them for side-effects only. Pathological code can abuse `IO` to
-sqaunder any benefits of strongly-typed functional programming.
+squander any benefits of strongly-typed functional programming.
 
 > sendSecret :: IO ()
 > sendSecret = writeFile "/tmp/secret" "Who is Benjamin Disraeli?"
@@ -60,16 +60,273 @@ sqaunder any benefits of strongly-typed functional programming.
 > andTheAnswerIs :: IO String
 > andTheAnswerIs = readFile "/tmp/secret" 
 
-IO is also famously magical -- it just pops into existence in `main`
+Fortunately, IO isn't an all-or-nothing proposition. 
 
-Fortunately, IO isn't an all-or-nothing proposition. First and most
-obviously, you can use pure code in IO whenever you like. This will
-arise naturally if your factoring is halfway decent.
+First and most obviously, you can use pure code in IO whenever you
+like. This will arise naturally if your factoring is halfway decent.
 
-We can also drop into other monadic or applicative expressions within IO.
-IO, being 
-"enhance" IO with additional effectful 
-functionality. Mainly this is accomplished with *monad transformers*,
+> countCharInFile :: Char -> FilePath -> IO Int
+> countCharInFile c f = do
+>   contents <- readFile f
+>   return (countChar c contents)
+>
+> countChar :: Char -> String -> Int
+> countChar c = length . filter (==c)
+
+`countChar` is 100% pure, and easy to test in GHCI.
+
+```
+ghci> countChar 'a' "aba"
+2
+```
+
+GHCI makes it pretty easy to test IO functions too though.
+
+```
+ghci> countCharInFile 'a' "Effectful.lhs"
+761
+```
+
+But "pure", or at least non-effectful, functions have their limits.
+What we want to exploit is how `IO` can be composed with other
+effectful types to create the exact "computational environment" to model
+your solution. This is accomplished with *monad transformers*,
+and made manageable with *typeclass constraints*.
+
+Lastly, it's important to understand how to "dip into" other computational
+contexts within a larger one: for instance, to run some failure-prone
+pure computations in `Maybe` in the middle of an IO function. This
+is all about getting comfortable with `Functor`, `Applicative` and
+`Monad`.
+
+But first, what is this `IO` thing anyway??
+
+IO
+==
+
+I've avoided calling `IO` a "monad" because first and foremost, it's a
+*type*, of kind `* -> *` (see my [previous
+article](http://slpopejoy.github.io/2015/04/10/Types/) for an intro to
+kinds).
+
+```
+ghci> :k IO
+IO :: * -> *
+```
+
+Thus, just like you'd write `Set String` to make `Set` inhabitable
+with `String` values, you write `IO Handle` to indicate an IO action
+that produces a `Handle` value. If you wanted an `IO` action that
+returns `Set String`, you'd need to break out parentheses:
+
+> setProducingAction :: IO (Set String)
+> setProducingAction = return $ singleton "contrived"
+
+`IO ()` means the function has no output -- `()` is the "unit type",
+which is uninhabitable by any value. Not to be confused with `null`
+from those other languages, which can inhabit just about anything:
+`()` can never have a value except itself. Thus, `IO ()` is all about
+side effects, like `main` or `putStrLn` -- we ignore the empty result.
+
+Most operation with `IO` exploits the fact that it is indeed a `Monad`,
+which is why we often see `do` notation in IO functions: `do` is
+syntactic sugar designed to make coding with Monads easier. 
+
+Monad and do notation
+=====================
+
+`Monad` is a typeclass, meaning any instance of `Monad` will support a number of functions:
+
+```
+ghci> :i Monad
+class Monad (m :: * -> *) where
+  (>>=) :: m a -> (a -> m b) -> m b
+  (>>) :: m a -> m b -> m b
+  return :: a -> m a
+  fail :: String -> m a
+```
+
+You'll note that `Monad` requires a two-star--kinded type (`* -> *`), so all monads
+will have *at least* one extra type parameter. This is also true of `Functor` 
+and `Applicative`: all three of these typeclasses expect a two-star kind. 
+The "AMP" proposal is coming to a GHC near you soon, enforcing the super-class
+hierarchy Functor => Applicative => Monad, so we'll keep referencing the trio
+of types often.
+
+You only have to implement two of these functions to be a monad, since the others
+are defined in terms of them: `(>>=)` (called "bind"), and `return`. Under AMP, 
+you only have to implement "bind" because "return" will come with Applicative,
+as "pure". But let's stay focused here: `(>>=)` and `return` are the characteristic
+monad functions.
+
+`return` is pretty easy to use, it allows you to lift a value into the monadic 
+context.
+
+```
+ghci> :t return
+return :: Monad m => a -> m a
+```
+
+> returnIsEasy :: String -> IO String
+> returnIsEasy s = return (s ++ " is in IOooooooo")
+
+You get "return" for free from calling any function with the same underlying type.
+
+> ioNoReturn :: IO String
+> ioNoReturn = returnIsEasy "Elvis"
+
+Bind is the real magic of `Monad`, however. Bind is the fundamental operation
+of a Monad, by allowing functions to transform values from one underlying type
+to another, without ever leaving the monadic context.
+
+```
+ghci> :t (>>=)
+(>>=) :: Monad m => m a -> (a -> m b) -> m b
+```
+
+Instead of just grabbing the value via an accessor function and going
+to town, "bind" forces you to supply a function `(a -> m b)` to
+operate on the value of type `a` and `return` it back to the monadic
+context. 
+
+This inversion of control allows the Monad instance to enforce all kinds
+of invariants on what that computation is allowed to do: you don't simply 
+"call" a monadic function, you "bind" to it, with a function that accepts
+the value and "puts it back". 
+
+It's a lot simpler to understand the utility of Monad when we get to the
+nifty types like `State` and `Reader` and `Maybe`, where it will become
+obvious how `Monad` (and Applicative and Functor) turns pure functional
+code into wonderously imperative-looking powerhouses. 
+
+But `IO` on the other hand is pure mystery; Monad is how GHC "labels"
+impure IO code, and it's how the runtime can safely move values into
+and out of the side-effectful "real world".
+
+Binded by the light
+===================
+
+Coding with bind isn't too bad necessarily.
+
+> countCharInFileBind :: Char -> FilePath -> IO Int
+> countCharInFileBind c f = 
+>   readFile f >>= 
+>       \contents -> return (countChar c contents)
+
+Bind is an infix function, so we're taking "readFile f", of type
+`IO String`, and binding to get at the contents. Our lambda function
+then returns our desired result. 
+
+In fact, bind can make for some beautiful compositions:
+
+> countCharInFileEta :: Char -> FilePath -> IO Int
+> countCharInFileEta c f = 
+>     readFile f >>= return . countChar c
+
+You can almost see a "pipeline" of `readFile f` flowing into `countChar c`!
+
+Side-effect--only code, where the monadic result is unimportant, is
+easily inserted using `>>`.
+
+```
+ghci> :t (>>)
+(>>) :: Monad m => m a -> m b -> m b
+```
+
+> countCharPutStr :: Char -> FilePath -> IO Int
+> countCharPutStr c f = 
+>    putStrLn ("counting " ++ [c] ++ " in " ++ f) >>
+>        readFile f >>= return . countChar c
+
+Assigning variables is a little tricky. `where` gets funny with all of 
+the lambda scopes; `let` composes better with the flow of "bind".
+
+> countCharLog :: Char -> FilePath -> IO Int
+> countCharLog c f = 
+>    readFile f >>= 
+>        \contents -> let cc = countChar c contents 
+>                     in putStrLn ("Counted " ++ show cc ++ 
+>                                  " of " ++ [c] ++ " in " ++ f) >>
+>                     return cc
+
+It can get ugly though when you bind up a storm.
+
+Do notation
+===========
+
+`do` notation offers nice syntax to "clean up" repeated `>>=`, `>>`
+and `let` expressions.
+
+> countCharLogDo :: Char -> FilePath -> IO Int
+> countCharLogDo c f = do
+>   contents <- readFile f
+>   let cc = countChar c contents
+>   putStrLn ("Counted " ++ show cc ++ " of " ++ [c] ++ " in " ++ f)
+>   return cc
+
+
+
+TODO
+====
+
+
+`setProducingAction` shows
+how easy it is to lift a pure computation into `IO`: just `return` it.
+Bind, however, can get tricky sometimes.
+
+~~~
+ghci> :t (>>=)
+(>>=) :: Monad m => m a -> (a -> m b) -> m b
+~~~
+
+Generally speaking, "bind" is the only way to operate on a monadic value.
+Instead of just grabbing the value via an accessor or something, you 
+must use a function `(a -> m b)` to operate on the value and `return` it back
+to the monadic context. This allows the Monad instance to enforce all kinds
+of invariants on what that computation is allowed to do: you don't simply 
+"call" a monadic function, you bind to it with a function that is provided
+with the results.
+
+But, code using bind can get a little unweildy. Here's the "desugared"
+version of `initLogFileNaive` above:
+
+> initLogFileBind :: AppConfig -> IO Handle 
+> initLogFileBind config = 
+>     openFile (logfile config) WriteMode >>= 
+>         (\handle -> hPutStrLn handle ("Version: " ++ version config) >> 
+>             return handle)
+
+`openFile` returns `IO Handle`; to access it, we provide a lambda
+function with `handle` as the argument, and use it to write to stdout.
+Our last task is to return the handle, so we have to bind to
+`hPutStrLn` to return the handle "after" the write occurs. We don't care
+about the output of `hPutStrLn` so we use `>>`, a version of bind that
+ignores the bound value.
+
+The `do` version above is more legible. 
+
+```haskell
+   do
+     handle <- openFile (logfile config) WriteMode
+     hPutStrLn handle ("Version: " ++ version config)
+     return handle
+```
+
+Just remember that `do` is syntactic magic. It's important to 
+be aware how the bind operations are woven together behind it.
+
+
+Finally, we also want to look at how we can change this "computational
+environment" within functions and without. 
+
+
+
+
+
+  We can also drop into other monadic or applicative
+expressions within IO.  IO, being "enhance" IO with additional
+effectful functionality. Mainly this is accomplished with *monad
+transformers*,
 
 
   
@@ -127,11 +384,11 @@ the compiler can prevent truckloads of bugs and other unwelcome runtime surprise
 
 With IO, we can subvert all of this. 
 
-> sendSecret :: IO ()
-> sendSecret = writeFile "/tmp/secret" "Who is Benjamin Disraeli?"
->
-> andTheAnswerIs :: IO String
-> andTheAnswerIs = readFile "/tmp/secret"
+--> sendSecret :: IO ()
+--> sendSecret = writeFile "/tmp/secret" "Who is Benjamin Disraeli?"
+-->
+--> andTheAnswerIs :: IO String
+--> andTheAnswerIs = readFile "/tmp/secret"
 
 The function types won't help us understand what's going on, and thus
 the compiler won't prevent any bugs. But we gotta fire those missles,
@@ -182,89 +439,6 @@ environment* they can access at any time.
 But we also need to do this in IO. To do so we need to understand a little
 more about its type.
 
-IO
-==
-
-I've avoided calling `IO` a "monad" because first and foremost, 
-it's a *type*, of kind `* -> *` (see my [previous article](http://slpopejoy.github.io/2015/04/10/Types/) for an intro to kinds). 
-
-```
-ghci> :k IO
-IO :: * -> *
-```
-
-Thus, just like you'd write `Set String` to
-make `Set` inhabitable with `String` values, you write `IO Handle` to indicate
-an IO action that produces a `Handle` value. If you wanted an `IO` action that returns
-`Set String`, you'd need to break out parentheses:
-
-> setProducingAction :: IO (Set String)
-> setProducingAction = return $ singleton "contrived"
-
-So remember, `IO` is just a two-star kind type. Its contained type is 
-a value you can retreive from the operation. `IO ()` means the function has no
-output, and is all about side effects (like `main`).
-
-But IO is indeed a Monad, which affects our ability to compose other
-functionality with it. So let's look briefly at Monad, and its special sugar,
-"do notation".
-
-Monad and do notation
-=====================
-
-`Monad` is a typeclass which happens to have an `IO`
-implementation. It's one of the most powerful typeclasses in Haskell,
-since it has dizzyingly general applicability to diverse
-computational models. 
-
-The statement "IO is a monad" means that `IO` has
-implementations for the functions `(>>=)` (called "bind"), and
-`return`. All monads must implement these two functions.
-
-`return` is pretty easy to use. `setProducingAction` shows
-how easy it is to lift a pure computation into `IO`: just `return` it.
-Bind, however, can get tricky sometimes.
-
-~~~
-ghci> :t (>>=)
-(>>=) :: Monad m => m a -> (a -> m b) -> m b
-~~~
-
-Generally speaking, "bind" is the only way to operate on a monadic value.
-Instead of just grabbing the value via an accessor or something, you 
-must use a function `(a -> m b)` to operate on the value and `return` it back
-to the monadic context. This allows the Monad instance to enforce all kinds
-of invariants on what that computation is allowed to do: you don't simply 
-"call" a monadic function, you bind to it with a function that is provided
-with the results.
-
-But, code using bind can get a little unweildy. Here's the "desugared"
-version of `initLogFileNaive` above:
-
-> initLogFileBind :: AppConfig -> IO Handle 
-> initLogFileBind config = 
->     openFile (logfile config) WriteMode >>= 
->         (\handle -> hPutStrLn handle ("Version: " ++ version config) >> 
->             return handle)
-
-`openFile` returns `IO Handle`; to access it, we provide a lambda
-function with `handle` as the argument, and use it to write to stdout.
-Our last task is to return the handle, so we have to bind to
-`hPutStrLn` to return the handle "after" the write occurs. We don't care
-about the output of `hPutStrLn` so we use `>>`, a version of bind that
-ignores the bound value.
-
-The `do` version above is more legible. 
-
-```haskell
->   do
->     handle <- openFile (logfile config) WriteMode
->     hPutStrLn handle ("Version: " ++ version config)
->     return handle
-```
-
-Just remember that `do` is syntactic magic. It's important to 
-be aware how the bind operations are woven together behind it.
 
 ReaderT
 =======
@@ -305,13 +479,6 @@ or more specifically, `ReaderT`, a *monad transformer*
 which will allow us to "decorate" IO with a read-only environment
 variable.
 
-> initLogFileReaderT :: ReaderT AppConfig IO Handle
-> initLogFileReaderT = do
->   f <- reader logfile
->   v <- reader version
->   handle <- liftIO $ openFile f WriteMode
->   liftIO $ hPutStrLn handle ("Version: " ++ v)
->   return handle
 
 Note that we had to add `liftIO` to our invocations of `openFile` and `hPutStrLn`.
 Monad transformers "wrap" other monads such that we can "lift" the wrapped
