@@ -10,7 +10,13 @@ composition from Java into Haskell, a typed functional programming language.
 Generative Techniques for Pitch Sequences
 =========================================
 
-"Pleonid" employs a minimum of random or stochastic techniques preferring a generative, elaborative approach. The "seed" of the entire composition is a melodic sequence.
+"Pleonid" employs a minimum of random or stochastic techniques
+preferring a generative, elaborative approach. The first phase of
+generation involves manipulating pitch sets to arrive at a series of
+pitch sequences, or "lines", which will form the basis of the piece.
+The path to these lines is covered in this section.
+
+The "seed" of the entire composition is a melodic sequence.
 
 ![Seed melody of *Pleonid*.](figures/01-seed.png)
 
@@ -36,17 +42,11 @@ for intervals and melodies.
 In this case of the pitch class set-sequence, the reduced range
 creates an effective gamut of 7. For many procedures in Pleonid I use
 a gamut of 10, such as for the "steerings" described below, mainly to
-create interesting non-octave symmetries.
+create interesting non-octave symmetries. When we discuss orchestration
+below we'll see 10 used again for its intervallic character.
 
-However I also chose 10 as a register "layout" for the quintet
-instrumentation. 10, the "dominant 7" interval, is near the major- and
-minor-sixth interval that makes for sonorous and pleasing
-voicings. Meanwhile each voice ends up with a harmonic/melodic
-"neighborhood" distinct from the other instruments.
-
-
-Generate N-ads
---------------
+Generating N-ads
+----------------
 
 The first transformation is to generate every chord or "sub-scale" that
 can be built from this scale/sequence.
@@ -65,16 +65,21 @@ recursive list comprehensions:
 > genNAds (x:xs) = [x:ps | ps <- genNAds xs] ++ 
 >                      [(x+p):ps | p:ps <- genNAds xs]
 
-This is a first illustration of the admirable expressiveness of functional 
-programming. The corresponding Java code is considerably longer. 
+This is a first illustration of the admirable expressiveness of
+functional programming. The corresponding Java code is considerably
+longer and more bug-prone. I give credit to "Cale" on the #haskell IRC
+channel for coming up with the first version of this brilliant
+formation, in response to my desperate plea for help. (There were other
+equally delightful offers, one using monadic list notation).
 
-An example is to take the sequence `C D E F`. The intervals are `[2,2,1]`, and 
-the resulting tuples are `[[2,2,1],[2,3],[4,1],[5]]`.
+To illustrate, let's take the sequence `C D E F`, whose intervals are `[2,2,1]`.
+The resulting tuples are `[[2,2,1],[2,3],[4,1],[5]]`.
 
 ![Generating all "N-ads" from a sequence.](figures/02-genNAds.png)
 
-In *Pleonid*, the scale produces 16 N-ads, of which I remove the final dyad
-`(0,7)` as trivial/uninteresting.
+Performing this operation on the Pleonid interval vector `[2,1,1,1,2]`
+produces 16 tuples. Like the example, the final dyad simply bounds the scale, 
+so I drop it as trivial/uninteresting. Note the full scale is the first tuple.
 
 ![Pleonid scale tuples.](figures/02a-genNAdsPleonid.png)
 
@@ -87,11 +92,11 @@ material. The approach used was inspired by procedures invented by the Dutch com
 Peter Schat which he called the "Tone Clock" (*Toonklok*).
 
 The tone clock represents the 12 distinct triads that can "fit" into
-the 12-tone gamut.  Triads are represented as *normalized, reversible*
+the 12-tone gamut.  Triads are represented as *normalized, invertible*
 identities. Normalization picks the most compact version, like
 pitch-class sets. Thus the major triad is represented as `(4,3)`, the
 first inversion, instead of the 2nd inversion `(3,5)` or 3rd
-`(5,4)`. They are reversible such that the major triad is
+`(5,4)`. They are *invertible* such that the major triad is
 classified with its inverse, the minor triad `(3,4)`.
 
 In the 12-tone scale, there are only 12 of these triad identities. 
@@ -123,77 +128,121 @@ with more than 2 intervals, we are no longer simply "inverting" the values
 but *rotating* them, such that for the tetrad `(1,3,2)` we have `(3,2,1)` and
 `(2,1,3)`.
 
-It is also straightforward to apply the operation to gamuts other than
-12, although relaxing the saturation requirement is productive. Triads
-combine with the 12-gamut very well, in that 3 divides perfectly into
-12. Pleonid's 10-gamut would only allow 5-tuples if they needed to saturate
-the gamut. 
+![Rotations of the tetrad (1,3,2).](figures/03a-tetradRotation.png)
 
-By removing this constraint I was able to "steer" other tuple
-sizes. This still preserves just the character of overlapping tuple
-inversion "placements" such that their note values do not collide.
-Even so, some chords will not "steer", either because the note count is
-too large, or the intervals do not permit any further placements. 
+To apply the operation to other gamuts than 12, relaxing the
+saturation requirement proved to be productive.  Triads combine with
+the 12-gamut very well, in that 3 divides perfectly into 12. Pleonid's
+10-gamut would only allow 5-tuples if they needed to saturate the
+gamut. 
 
-The next generative procedure in the Pleonid composition, then, is to
-search out all of the relaxed "steerings" of each of the 15 scale
-tuples above in a 10-gamut. 
+By removing this constraint, I was able to "steer" most tuples below
+1/2 the size of the gamut. This still preserves the character of
+overlapping tuple configurations such that their note values do not
+collide. Even so, some chords will not "steer", either because the
+note count is too large, or the intervals do not permit any further
+placements.
 
-The outcome was very successful, with only three tuples being
-"un-steerable". An example of the results of the steering procedure is
-the 3rd tuple, the 5-tuple `(2,1,2,2)`. This steers into the 10-gamut two ways:
+Steering search
+---------------
+
+To steer a tuple, I have to search for all valid placements of a tuple
+in the gamut. I leverage the observation that every N-ad is steered by
+another "M-ad" where `M` is N divided by the gamut. Thus a 5-tuple is
+steered by some dyad (2-tuple) in a 10-gamut.
+
+I generate every rotation of every possible normalized M-ad in the
+gamut. For each M-ad, I evaluate every possible configuration of the
+tuple.  With the 5-tuple and dyad example, I would try all 5 rotations
+of the 5 tuple in both "slots", resulting in 25
+configurations. Collisions and duplicates are removed, producing the
+final result, 2 "steerings" or valid configurations.
+
+This is performed for the 15 scale tuples shown above. Only 3 tuples
+are "un-steerable," while the rest were quite productive, producing 49
+distinct steerings. For an example, the 5-tuple `(2,1,2,2)` is found
+to steer into the 10-gamut two ways:
 
 ![Steering (2,1,2,2) in a 10-gamut.](figures/05-pleoSteering3.png)
 
 The last tuple of the second steering is noteworthy, as the last note
 is "gamut-wrapped". The rotation of the interval is `(2,2,1,2)` but since
 the last note goes above the gamut boundary (Bb), it must be "wrapped"
-(modulo) for the gamut, resulting in the C# pitch. 
+(modulo) for the gamut, resulting in the C# pitch instead of a B.
 
-This is one way non-standard gamuts create interest; in a 12-gamut the
-chroma would be identical, but here, the C# creates new intervallic
-information.
+This is one way non-standard gamuts create interest. In a 12-gamut the
+chroma would be identical: a D above the octave "sounds the same" as
+the D below. Here, C# sounds quite different than B, adding new pitch
+information to the composition.
 
-Preserving/projecting seed melody features
-------------------------------------------
+Preserving seed melody features (or not)
+----------------------------------------
 
-The steering procedure creates 49 distinct steerings of almost random
-character except for their "source" being an interval derived from the
-scale tuples. To amplify the intervallic character, the steerings
-are filtered by a rule where at least one of the steering tuples
-must be built from the source scale. 
+The 49 distinct steerings created have an almost random character,
+except for their "source" being an interval derived from the scale
+tuples. To amplify the intervallic character, the steerings are
+filtered by a rule where at least one of the steering tuples must be
+built from the source scale.
 
 Thus, the steering `[0,2,3,5,7],[4,6,8,9,1]` is allowed, since
 `[0,2,3,5,7]` is in the source scale `[0,2,3,4,5,7]`. Meanwhile, the
 steering `[0,1,3,5,7],[2,4,6,8,9]` is discarded, since both tuples
 have notes outside of the source scale. 
 
-This filter reduces the steering count to 32. These are then
-concatenated and de-duplicated to yield a sequence of 36 different
-"chords" or tuples which will form the basis of the composition.
+This filter reduces the 49 steerings to 32. The tuples then undergo
+a mapping procedure, intended to map any scale tones back to the
+register they appear in the original seed sequence. So for instance, if a
+`G` appears in a chord, it would be mapped to below middle-C.
 
-These chords then undergo a somewhat botched mapping procedure. 
-The intent was to map any scale tones back to the register they
-appear in the original seed motif. So for instance, if a `G` appears
-in a chord, it would be mapped to below middle-C. 
+![Intended mapping of pitches oto original seed sequence.](figures/06-mappingCorrect.png)
 
-The original Java code however had a bug which was not corrected
-before performance, and was only revealed in the Haskell rewrite. 
-As a result, the pitches selected for remapping were more or less
-randomly chosen. The mapping was at least stable, so most of the
-*structural* properties were preserved. And at least the intent
-of adding more intervallic interest to a gamut-limited set of chords
-succeeded. 
+This mapping procedure did not go as planned however: a bug in the original
+Java code resulted in a more or less random mapping. 
 
-As we will see this was not the last unintended consequence of overly
-complex procedural code. Finding issues like this during the rewrite
-was distressing from a formal point of view, and makes me happy to 
-be using a more powerful, expressive and correct language going forward.
+![Buggy mapping makes for unplanned results.](figures/07-mappingIncorrect.png)
+
+Thus the attempt to "preserve seed melody features" more or less
+fails. The filtering above prefers tuples carrying the seed-scale
+pitches, but the buggy mapping affects seed-scale pitches *more* than
+non-seed-scale ones. Thus these very pitches are the most
+distorted. At least, the mapping succeeds in adding some intervallic
+interest to a gamut-limited set of chords.
+
+This bug was only discovered during the port to Haskell. Like much
+combinatorial code in Java, the mapping code was creaky and complex,
+while the Haskell code is concise and far simpler. I now
+have both methods, the broken and the correct one. Future works will
+choose which "sounds better". So much for formal purity!
 
 Lines from chords
 -----------------
 
-At this point the chords were complete
+We now have 32 steerings, which group tuples of a particular size: 2 5-tuples,
+or 3 3-tuples, etc. Melodies are generated from this by simply interleaving
+the values to create a longer line. 
+
+![Interleaving steerings to generate lines.](figures/08-interleave.png)
+
+To maximize interest, monotonically increasing or decreasing lines --
+lines that only move in one direction -- are discarded. Interestingly
+this results in only one result filtered. 
+
+This results in 31 lines. These form the foundation of the actual musical
+composition. We're ready to create real musical ideas.
+
+Rhythm + Melody = Motif: Braids
+===============================
 
 
 
+
+
+
+
+
+
+However I also chose 10 as a register "layout" for the quintet
+instrumentation. 10, the "dominant 7" interval, is near the major- and
+minor-sixth interval that makes for sonorous and pleasing
+voicings. Meanwhile each voice ends up with a harmonic/melodic
+"neighborhood" distinct from the other instruments.
