@@ -117,9 +117,9 @@ ghci> :k IO
 IO :: * -> *
 ```
 
-Thus, just like you'd write `Set String` to make `Set` inhabitable
-with `String` values, you write `IO Handle` to indicate an IO action
-that produces a `Handle` value. If you wanted an `IO` action that
+Thus, just like you'd write `Set String` to make Set inhabitable
+with String values, you write `IO Handle` to indicate an IO action
+that produces a Handle. If you wanted an `IO` action that
 returns `Set String`, you'd need to break out parentheses:
 
 > setProducingAction :: IO (Set String)
@@ -211,7 +211,7 @@ of invariants on what that computation is allowed to do. You don't simply
 "call" a monadic function, you "bind" to it, with a function that accepts
 the value and "puts it back". 
 
-IO is a funny Monad instance, in a way. When we use types like `State`
+`IO` is a funny Monad instance, in a way. When we use types like `State`
 and `Reader` and `Maybe` we reap huge gains in elegance and power;
 what's more, the code is right there on Hackage for us to study and
 understand. IO, however, is mysterious, and we use it as a monad "just
@@ -319,17 +319,19 @@ composition.
 > countCharReverseBind :: Char -> FilePath -> IO Int
 > countCharReverseBind c f = return . countChar c =<< readFile f
 
-Unfortunately, it doesn't compose as nicely, so eta-reduction gets
-clumsy. 
+In a pure function, `f` would be a candidate for eta reduction. 
+Unfortunately, the infix precedences of `=<<` and `.` don't play
+nicely, so point-free style gets a little clumsy.
 
 > countCharReverseBindEta :: Char -> FilePath -> IO Int
 > countCharReverseBindEta c = (return . countChar c =<<) . readFile
 
-In the end, "forward bind" works with infix style better.
+In the end, "forward bind" works with infix style better, and maps directly
+to `do` sugar. It's thus is more idiomatic.
 
 Do notation is great. However, until you're really comfortable with monads,
 you should regularly "de-sugar" `do` blocks back into `>>=`, `>>`, `let` and lambdas,
-as it makes the monadic functionality more explicit and clear.
+to make the monadic functionality more explicit and clear.
 
 IO is a Functor 
 ===============
@@ -366,7 +368,7 @@ In Haskell, `map` is the specialization of `fmap` for lists.
 
 Many tourists to functional programming learn `map` (and maybe its
 cousin `reduce`/`fold`) as a list operation only before stamping FP
-onto their resume. Haskellers go a lot further with Functor.
+onto their resume. Haskellers go a lot further with `Functor`.
 
 With effectful types like `IO`, `fmap` allows us to "plug in" a pure operation
 into a effectful one. Given some effectful result, we want to transform it
@@ -377,8 +379,8 @@ Our char-counting function is an excellent candidate for plugging in `fmap`.
 > countCharInFileFmap :: Char -> FilePath -> IO Int
 > countCharInFileFmap c f = fmap (countChar c) (readFile f)
 
-Our "effectful" code is looking more and more functional. Indeed the only
-indication here that our code has "magic" IO involved is the type `IO Int`.
+Our effectful code is looking more and more functional. Indeed the only
+indication here that our code has "magic" IO involved is the type: `IO Int`.
 
 Following the types makes it clear what `fmap` is accomplishing:
 
@@ -529,7 +531,7 @@ and a pure function that validates message lengths:
 >      else Right ()
 
 No problem with this, except it's a little ... "manual". We'd prefer
-to *formalize* this practice in our app, however, as functions
+to *formalize* this practice, as functions
 "participating in a configured environment". Along the way it'd be
 nice to get `config` out of the argument list, since it's not
 really germane to the function's specific job.
@@ -545,7 +547,7 @@ One way to formalize our approach is with a type synonym.
 > validateMessageTS = validateMessage
 
 Our equations prove that the `ConfigReader` type synonym works.  It's
-light formalization that also hides `AppConfig` from our
+a light formalization that also hides `AppConfig` from our
 signatures. But, we still have to deal with a `config` argument to
 read any values out, and we have to make sure that argument is the last 
 in the list, etc.
@@ -562,7 +564,7 @@ ReaderT and the case of the missing monad
 
 A funny thing happened on the way to modern Haskell: some classic
 monads disappeared. `Reader` is one such classic. It's type is `(->
-r)`: it literally formalizes an "extra argument" into a *datatype*.
+r)`: it literally formalizes an "extra argument" into a datatype.
 
 It's also nowhere to be found. All we can find is a type synonym defining 
 it in terms of `ReaderT Identity`. Huh?
