@@ -1,0 +1,6 @@
+.cabal-sandbox
+_cache
+_site
+cabal.sandbox.config
+dist
+tags
