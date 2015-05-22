@@ -1,60 +1,46 @@
+*{
+	-moz-box-sizing:border-box;
+	-webkit-box-sizing:border-box;
+	box-sizing:border-box
+}
 
 body {
     font-family: "Computer Modern Serif";
     color: black;
-    font-size: 16px;
-    margin: 0px 16px 0px 16px; 
+    font-size: 18px;
 }
 
-@media (min-width: 990px) {
-  body {
-    width: 600px;
-    margin: 0px auto 0px auto;
-  }
-}
 
-div#header {
+#header {
     border-bottom: 2px solid black;
     margin-bottom: 30px;
     padding: 12px 0px 12px 0px;
 }
 
-#logo a {
-    color: black;
-    float: left;
-    font-size: 18px;
+.header_a {
+    text-decoration: none;
     font-weight: bold;
     font-style: italic;
-    text-decoration: none;
 }
 
-@media (min-width: 990px) {
-	#logo a {
-		font-size: 18px;
-    }
+#lefty {
+	float: left;
+	position: relative;
 }
 
-div#header #navigation {
-    text-align: right;
+#navigation {
+	text-align: right;
 }
 
-div#header #navigation a {
-    color: black;
-    font-size: 18px;
-    font-weight: bold;
-    margin-left: 12px;
-    font-style: italic;
-    text-decoration: none;
-}
-
-div#footer {
+#footer {
     border-top: solid 2px black;
     color: #555;
     font-size: 12px;
     margin-top: 30px;
-    padding: 12px 0px 12px 0px;
+    padding: 4px 0px 12px 0px;
     text-align: right;
 }
+
 
 h1 {
     font-size: 24px;
@@ -64,20 +50,37 @@ h2 {
     font-size: 20px;
 }
 
-div.info {
-    color: #555;
-    font-size: 14px;
-    font-style: italic;
-}
 
-pre {
-   padding-left: 50px;
-   font-size: 30px;
-}
 
-@media (min-width: 990px) {
+/* mobile: 21em */
+@media all and (min-width: 21em) { 
+	
 	pre {
-		padding-left: 25px;
-		font-size: 16px;
+		font-size: 75%;
+		margin-left: 0px;
+	}
+	
+	p code {
+		font-size: 85%;
+	}
+
+}
+
+/* browser: 90em*/
+@media all and (min-width: 80em) {
+	body {
+		width: 700px;
+		margin-right: auto;
+		margin-left: auto;
+	}
+    pre {
+		font-size: 90%;
+        margin-left: 25px;
     }
+
+	p code {
+		font-size: 95%;
+	}
+
+
 }
