@@ -1,7 +1,9 @@
-% Types & Kinds
-% Stuart Popejoy
-% March 2015
- 
+---
+title: Types & Kinds
+author: Stuart Popejoy
+date: March 2015
+---
+
 This article seeks to give a whirlwind tour of basic type signatures
 in Haskell. Types are pretty important in Haskell so it's good to
 make sure you understand the basics.

@@ -1,6 +1,8 @@
-% Effectful Haskell
-% Stuart Popejoy
-% April 2015
+----------
+title: Effectful Haskell
+author: Stuart Popejoy
+date: 2015-05-14
+----------
 
 *"Code written in Haskell is guaranteed to have no side effects."...*
 

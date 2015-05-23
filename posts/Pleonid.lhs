@@ -1,6 +1,8 @@
-% Algorithmic Compositional Techniques Developed for "Pleonid"
-% Stuart Popejoy
-% May 2015
+----------
+title: Algorithmic Compositional Techniques Developed for "Pleonid"
+author: Stuart Popejoy
+date: 2015-05-15
+----------
 
 "Pleonid" (2012, Stuart Popejoy) is an algorithmic composition for
 quintet. This paper describes the methods used for its creation, "warts
@@ -18,13 +20,13 @@ The path to these lines is covered in this section.
 
 The "seed" of the entire composition is a melodic sequence.
 
-![Seed melody of *Pleonid*.](figures/01-seed.png)
+![Seed melody of *Pleonid*.](figures/pleonid/01-seed__small.png)
 
 This is normalized into a *pitch class set* of value `[0,2,3,4,5,7]`
 (No. 6-8 in Forte classification). Departing from set theory, I use this
 ordered sequence as a "scale" for further transformations.
 
-![Pitch class set and main scale.](figures/01a-seedScale.png)
+![Pitch class set and main scale.](figures/pleonid/01a-seedScale__small.png)
 
 Gamut
 -----
@@ -75,13 +77,13 @@ equally delightful offers, one using monadic list notation).
 To illustrate, let's take the sequence `C D E F`, whose intervals are `[2,2,1]`.
 The resulting tuples are `[[2,2,1],[2,3],[4,1],[5]]`.
 
-![Generating all "N-ads" from a sequence.](figures/02-genNAds.png)
+![Generating all "N-ads" from a sequence.](figures/pleonid/02-genNAds__small.png)
 
 Performing this operation on the Pleonid interval vector `[2,1,1,1,2]`
 produces 16 tuples. Like the example, the final dyad simply bounds the scale, 
 so I drop it as trivial/uninteresting. Note the full scale is the first tuple.
 
-![Pleonid scale tuples.](figures/02a-genNAdsPleonid.png)
+![Pleonid scale tuples.](figures/pleonid/02a-genNAdsPleonid.png)
 
 The Tone Clock
 --------------
@@ -111,7 +113,7 @@ major/minor/major/minor at `0,2,6,8`, and minor/minor/major/major at
 `0,2,4,6`. Schat dubs these configurations "steerings", as though we are 
 "steering" the intervals through the 12-tone scale.
 
-![Steerings of Hour IX, the major/minor triad identity in the Tone Clock.](figures/03-ixSteerings.png)
+![Steerings of Hour IX, the major/minor triad identity in the Tone Clock.](figures/pleonid/03-ixSteerings.png)
 
 Each triad identity "hour" has a similarly fixed number of
 configuration "steerings" possible, resulting in 33 total
@@ -128,7 +130,7 @@ with more than 2 intervals, we are no longer simply "inverting" the values
 but *rotating* them, such that for the tetrad `(1,3,2)` we have `(3,2,1)` and
 `(2,1,3)`.
 
-![Rotations of the tetrad (1,3,2).](figures/03a-tetradRotation.png)
+![Rotations of the tetrad (1,3,2).](figures/pleonid/03a-tetradRotation__small.png)
 
 To apply the operation to other gamuts than 12, relaxing the
 saturation requirement proved to be productive.  Triads combine with
@@ -163,7 +165,7 @@ are "un-steerable," while the rest were quite productive, producing 49
 distinct steerings. For an example, the 5-tuple `(2,1,2,2)` is found
 to steer into the 10-gamut two ways:
 
-![Steering (2,1,2,2) in a 10-gamut.](figures/05-pleoSteering3.png)
+![Steering (2,1,2,2) in a 10-gamut.](figures/pleonid/05-pleoSteering3.png)
 
 The last tuple of the second steering is noteworthy, as the last note
 is "gamut-wrapped". The rotation of the interval is `(2,2,1,2)` but since
@@ -194,12 +196,12 @@ a mapping procedure, intended to map any scale tones back to the
 register they appear in the original seed sequence. So for instance, if a
 `G` appears in a chord, it would be mapped to below middle-C.
 
-![Intended mapping of pitches oto original seed sequence.](figures/06-mappingCorrect.png)
+![Intended mapping of pitches oto original seed sequence.](figures/pleonid/06-mappingCorrect.png)
 
 This mapping procedure did not go as planned however: a bug in the original
 Java code resulted in a more or less random mapping. 
 
-![Buggy mapping makes for unplanned results.](figures/07-mappingIncorrect.png)
+![Buggy mapping makes for unplanned results.](figures/pleonid/07-mappingIncorrect.png)
 
 Thus the attempt to "preserve seed melody features" more or less
 fails. The filtering above prefers tuples carrying the seed-scale
@@ -221,7 +223,7 @@ We now have 32 steerings, which group tuples of a particular size: 2 5-tuples,
 or 3 3-tuples, etc. Melodies are generated from this by simply interleaving
 the values to create a longer line. 
 
-![Interleaving steerings to generate lines.](figures/08-interleave.png)
+![Interleaving steerings to generate lines.](figures/pleonid/08-interleave.png)
 
 To maximize interest, monotonically increasing or decreasing lines --
 lines that only move in one direction -- are discarded. Interestingly
@@ -233,7 +235,24 @@ composition. We're ready to create real musical ideas.
 Rhythm + Melody = Motif: Braids
 ===============================
 
+Working in the pitch domain lends itself to countless procedures and
+transformations, not to mention endless melodic and harmonic contexts
+to work with. Rhythm puts up more of a resistance to formalization and
+proceduralization. 
 
+My approach to applying rhythmic structure to melodies is inspired and
+powered by a form of notation used in knot theory in mathmatics, called
+*braid notation*. This allows a normalized knot presentation that
+captures fundamental features: 
+
+1. How many distinct strands constitute the braid. You can tie a knot with one or many strands.
+
+2. Where, and how many times, a cross occurs. You can obviously cross
+a strand with itself, or with other strands.
+
+3. The "polarity" of the cross: over-under or under-over.
+
+![A braid from Pleonid.](figures/pleonid/PleonidBraid00.png)
 
 
 
