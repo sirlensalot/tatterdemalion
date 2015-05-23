@@ -4,13 +4,19 @@ import           Data.Monoid
 import           Hakyll
 import qualified Data.Set as S
 import Text.Pandoc.Options 
-
+import qualified Text.HTML.TagSoup               as TS
+import qualified Data.Map as M
+import Text.Regex.TDFA ((=~~),(=~))
 
 
 --------------------------------------------------------------------------------
 main :: IO ()
 main = hakyll $ do
     match "images/*" $ do
+        route   idRoute
+        compile copyFileCompiler
+
+    match "posts/figures/**" $ do
         route   idRoute
         compile copyFileCompiler
 
@@ -37,6 +43,7 @@ main = hakyll $ do
             >>= loadAndApplyTemplate "templates/post.html"    postCtx
             >>= loadAndApplyTemplate "templates/default.html" postCtx
             >>= relativizeUrls
+            >>= applyPathMangledClass
 
     create ["archive.html"] $ do
         route idRoute
@@ -90,3 +97,15 @@ postCtx =
     dateField "date" "%B %e, %Y" 
                   <> teaserField "teaser" "content"
                   <> defaultContext
+
+
+applyPathMangledClass :: Item String -> Compiler (Item String)
+applyPathMangledClass item = return $ fmap (withTags procImg) item
+    where 
+      procImg (TS.TagOpen s a) | s == "img" = TS.TagOpen s .
+                                              procAttrs . M.fromList $ a
+      procImg t = t
+      procAttrs ma = M.toList $ maybe ma (procSrc ma) $ M.lookup "src" ma
+      procSrc ma u = procMangled ma (u =~ ("__([A-Za-z0-9]+)" :: String))
+      procMangled ma [[_,cls]] = M.insertWith (\a b -> a ++ " " ++ b) "class" cls ma
+      procMangled ma _ = ma

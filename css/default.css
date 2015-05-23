@@ -51,6 +51,11 @@ h2 {
 }
 
 
+.figure {
+	text-align: center;
+}
+
+
 
 /* mobile: 21em */
 @media all and (min-width: 21em) { 
@@ -64,6 +69,15 @@ h2 {
 		font-size: 85%;
 	}
 
+	img {
+		width: 350px;
+    }
+
+	img.small {
+		width: 280px;
+    }
+
+
 }
 
 /* browser: 90em*/
@@ -73,6 +87,13 @@ h2 {
 		margin-right: auto;
 		margin-left: auto;
 	}
+	img {
+		width: 500px;
+	}
+	img.small {
+		width: 275px;
+    }
+
     pre {
 		font-size: 90%;
         margin-left: 25px;
