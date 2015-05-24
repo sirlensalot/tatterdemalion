@@ -1,5 +1,5 @@
 ----------
-title: Effectful Haskell
+title: Effectful Haskell: IO, Monads, Functors
 author: Stuart Popejoy
 date: 2015-05-14
 ----------
@@ -8,9 +8,7 @@ date: 2015-05-14
 
 *..."because nobody will ever run it?"* [(xkcd)](http://xkcd.com/1312/ "xkcd reference") 
 
-To code any decent-sized application in Haskell -- something that
-reads config, or builds up some state, in addition to whatever
-missle-firing IO that you throw down -- you have to be comfortable
+To code any decent-sized application in Haskell, you have to be comfortable
 with *effectful* programming. 
 
 Haskell famously offers "pure" functions, and they are great, referentially
@@ -18,23 +16,27 @@ transparent and all that. But IO will be done. Assuming you want to
 factor your IO activity into more than just `main`, your app will have a 
 lot of functions in IO (or `MonadIO`).
 
-At the same time, you'll want to enhance your pure functions with core
-types that "encode" effectful behavior, such as Reader, Writer and
-State. Finally you'll want to integrate all of this will fancy
-libraries offering webservers, http clients, loggers, database access,
-and such.
+At the same time, you'll want to enrich your pure functions with the core
+library modules that "encode" effectful behavior -- such as maintaining 
+state over function calls, or reading from a static environment -- into your types.
 
-This article will offer a breadcrumb trail to follow in pursuit of
-"effectful" programming. To me, "effectful" captures the notions of
+Finally, you'll want to integrate all of this with fancy "solution" libraries
+offering webservers, http clients, loggers, database access, and such. 
+
+This article is the first in a series on "effectful programming". My
+informal definition of "effectful" encompasses
 
 1. Actual side-effects (IO)
-2. Stuff that seems like side-effects (e.g. State, Writer)
-3. A "computational environment" that persists through various function calls (e.g. Reader)
-4. Non-local control flow (Maybe, Either). 
+2. Stuff that seems like side-effects (State, Writer, etc.)
+3. Contexts that persist over function calls (Reader, State, etc.)
+4. Non-local control flow (Maybe, Either).
 
-This means using types that implement the `Functor` ==> `Applicative`
-==> `Monad` typeclass hierarchy, and managing the complexity that can
-arise when you use all of these things together.
+In all of these cases, "pure" programming, mapping specified inputs to
+outputs, gives way to richer metaphors that offer all the utility of 
+imperative or mutable programming, but with the *exact* contract of
+execution specified in the type. 
+
+It's the best of all possible worlds. Let's get started.
 
 > {-# LANGUAGE FlexibleContexts #-}
 > import System.IO
@@ -50,14 +52,16 @@ To write an app, you implement `main :: IO ()`.
 > main :: IO ()
 > main = putStrLn "Hello World!"
 
-`main` is the gateway drug into `IO`, and the first one's free: "Hello World"
+`main` is the gateway drug into `IO`, and the first one's free. "Hello World"
 is a one-liner, requiring no imports, and not even a type signature 
 if you're really lazy.
 
 Functions with the famous type signature `IO ()` have zero functional mojo.
-`()` is the empty type, meaning the function returns nothing:
-you run it for side-effects only. You can use `IO` to
-squander any benefits of strongly-typed functional programming, if you want.
+`()` is the empty type, meaning the function returns nothing: side-effects only.
+
+You can use `IO ()` to squander any benefits of strongly-typed functional
+programming, with magical values emerging from the big scary world
+outside the compiler.
 
 > sendSecret :: IO ()
 > sendSecret = writeFile "/tmp/secret" "Who is Benjamin Disraeli?"
@@ -70,84 +74,101 @@ Fortunately, IO isn't an all-or-nothing proposition.
 First and most obviously, you can use pure code in IO whenever you
 like. This will arise naturally if your factoring is halfway decent.
 
+> -- | pure function to count characters in a string
+> countChar :: Char -> String -> Int
+> countChar c = length . filter (==c)
+>
+> -- | use 'countChar' in IO on a file
 > countCharInFile :: Char -> FilePath -> IO Int
 > countCharInFile c f = do
 >   contents <- readFile f
 >   return (countChar c contents)
 >
-> countChar :: Char -> String -> Int
-> countChar c = length . filter (==c)
 
 `countChar` is 100% pure, and easy to test in GHCI.
 
-```
+```haskell
 ghci> countChar 'a' "aba"
 2
 ```
 
-GHCI makes it pretty easy to test IO functions too though.
+However, GHCI makes it easy to test IO functions too. Let's see
+how many times 'a' shows up in this article:
 
+```haskell
+ghci> countCharInFile 'a' "posts/Effectful.lhs"
+1482
 ```
-ghci> countCharInFile 'a' "Effectful.lhs"
-761
-```
 
-"Pure" functions, or at least non-effectful ones, have their limits.
-What we want to exploit is how `IO` can be composed with other
-effectful types to create the exact "computational environment" to model
-your solution. This is accomplished with *monad transformers*,
-and made manageable with *typeclass constraints*.
-
-Lastly, it's important to understand how to "dip into" other computational
-contexts within a larger one: for instance, to run some failure-prone
-pure computations in `Maybe` in the middle of an IO function. This
-is all about getting comfortable with `Functor`, `Applicative` and
-`Monad`.
-
-But first, what is this `IO` thing anyway??
+So what is this strange thing we call `IO`?
 
 IO
 ==
 
-I've avoided calling `IO` a "monad" because first and foremost, it's a
-*type*, of kind `* -> *` (see my [previous
-article](http://slpopejoy.github.io/2015/04/10/Types/) for an intro to
-kinds).
+IO in haskell is famously a Monad, but first and foremost, it's just
+another *type*. It's kind is `* -> *`. ^[See [this article](2015-04-10-Types.html) for an intro to kinds.]
 
-```
+```haskell
 ghci> :k IO
 IO :: * -> *
 ```
 
 Thus, just like you'd write `Set String` to make Set inhabitable
 with String values, you write `IO Handle` to indicate an IO action
-that produces a Handle. If you wanted an `IO` action that
-returns `Set String`, you'd need to break out parentheses:
+that produces a Handle. 
+
+If you want an `IO` action that produces a Set of Strings, you'll
+need to break out parentheses:
 
 > setProducingAction :: IO (Set String)
 > setProducingAction = return $ singleton "contrived"
 
-`IO ()` means the function has no output -- `()` is the "unit type",
-which is uninhabitable by any value. Not to be confused with `null`
-from those *other* languages, which can inhabit just about anything:
-`()` can never have a value except itself. Thus, `IO ()` is all about
-side effects, like `main` or `putStrLn` -- we ignore the empty result.
+() is not null
+--------------
 
-`IO` is, however, a monad. Most of the IO code you will write will use
-monadic expressions, which is why we often see `do` notation in IO
-functions, the syntactic sugar designed to make coding with Monads
-easier.
+As we noted above, `IO ()` means the function has no output. `()` is the "unit type",
+which is uninhabitable by any value: nothing can become `()`, and `()` cannot
+be casted or coerced into any other type. 
 
-So, to understand working with IO and other effectful types, we'll need
-to know how to work with Monads.
+As such, it is entirely different from `null` in those *other* languages, where
+it can inhabit any type, and any type can be null, causing bugs aplenty. 
+`()` can never have a value except itself. 
+
+`IO ()` therefore means that we're only executing this action for its side effects.
+However, functions like `readFile` are of type `IO String`, meaning "run side-effects
+and give me a `String` result." 
+
+In this regard, the two-kinded--ness of `IO` means something
+completely different than, say, `Set`. The second type in Set
+indicates what values it "holds"; the second type in IO
+indicates what single value it "produces".
+
+Effectful IO
+------------
+
+IO is obviously an action-packed, effect-having champ. However, it is
+also "effectful" in our sense here, since IO implements the
+typeclasses `Functor`, `Applicative` and `Monad`. 
+
+These typeclasses form a hierarchy, such that any `Monad` is an
+`Applicative`, and any `Applicative` is a `Functor`. ^[The
+Functor-Applicative-Monad hierarchy was only a convention until
+recently, when GHC 7.10 started enforcing the it]. They form the
+"effectful trio" of abstractions.
+
+All of the types we'll use to level-up our code implement this trio.
+Effectful programming in Haskell is all about learning how to leverage
+the APIs of these types. 
+
+Let's start with the most powerful, `Monad`.
 
 Monad: return and bind
 ======================
 
-`Monad` is a typeclass, meaning any instance of `Monad` will support 
-certain operations:
+Anything that is a `Monad` will support certain operations. Let's ask GHCI what
+they are:
 
-```
+```haskell
 ghci> :i Monad
 class Monad (m :: * -> *) where
   (>>=) :: m a -> (a -> m b) -> m b
@@ -156,257 +177,358 @@ class Monad (m :: * -> *) where
   fail :: String -> m a
 ```
 
-Note also the `* -> *` kind. All monads are like IO in that they
-require *at least* one other type.
+We see four functions making up the typeclass. We also see that any Monad
+must be of kind `* -> *`, like IO. This is true of `Applicative` and `Functor`
+as well.
 
-Monad is a member of a set of typeclasses, of which it is strictly 
-the most powerful; at the other end is `Functor` and in the middle
-is `Applicative`. All are `* -> *` kind, and as a set they form 
-the "effectful trio" that we will use again and again.
-
-Until recently, this membership was maintained by convention. While it
-would make no sense for a Monad to not also be a Functor, it is not
-guaranteed, and what's more it is not expressed in the type
-system. With GHC 7.10, the Functor => Applicative => Monad hierarchy
-is finally enforced.
+The two most important functions in Monad are `return` and `(>>=)`; the second
+is an infix operator called "bind". Let's look at each.
 
 return
 ------
 
-The two most important functions in Monad are `return` and `(>>=)`,
-called "bind".  `return` is pretty easy to understand: it allows you
-to lift a value into the monadic context.
+In isolation, `return` is disarmingly straightforward, albeit with a strange
+name. 
 
-```
+```haskell
 ghci> :t return
 return :: Monad m => a -> m a
 ```
+It simply allows you to stick a value into the monadic "context". Take an `a`,
+you get `Monad m => m a`.
 
 > returnIsEasy :: String -> IO String
 > returnIsEasy s = return (s ++ " is in IOooooooo")
 
-You get "return" for free from calling any function with the same underlying type.
+Just like that, we wrapped a String in `IO`. We're coding with the pros.
+
+Note that `return` is unnecessary if you're calling a function that is 
+already in your monad:
 
 > ioNoReturn :: IO String
 > ioNoReturn = returnIsEasy "Elvis"
 
+Pretty minimal. What's the point? The clue is in the name `return`.
+
+Functions whose type is monadic (their result is of type Monad x) are different
+than your usual function: instead of returning the monad, they "run inside"
+the monadic context, and any values must be "returned" back to the context. 
+
+So to really understand `return`, we have to understand its dual: bind.
 
 bind (>>=)
 ----------
 
-Bind is the real magic of `Monad`. With it, we use "monadic functions"
-to access, transform and "re-encode" values back into the monadic context.
+Bind is the real magic of `Monad`, formalizing how you operate on a monadic value. 
 
-```
+With non-monadic
+"container" (two-kinded) types, you'd just grab the underlying value
+via an accessor function or whatever and go to town. A monad however
+forces you to use bind to get at the good stuff: you have to supply 
+a *function* to operate on the value and "give it back" to the monadic
+context. The type makes this clear:
+
+```haskell
 ghci> :t (>>=)
 (>>=) :: Monad m => m a -> (a -> m b) -> m b
 ```
 
-Bind formalizes how you operate on a monadic value.  Instead of just
-grabbing values via an accessor and going to town, "bind" requires you
-to supply a function `(a -> m b)` to obtain the value as an argument
-and `return` it, or some transformation of it, back to the monadic
-context.  
+The first argument to `>>=` is the monad itself, `m a`. The second argument
+is the monadic function, which takes the bare value `a` and gets to work,
+producing the transformed value `b` in the monadic context: `(a -> m b)`.
 
 This inversion of control allows the Monad instance to enforce all kinds
 of invariants on what that computation is allowed to do. You don't simply 
-"call" a monadic function, you "bind" to it, with a function that accepts
-the value and "puts it back". 
+"call" a monadic function, you "bind" to it. You don't simply return a value
+from a function, you "return" it back to the context, using the API provided
+by the monad. The monad's code is in charge.
 
-`IO` is a funny Monad instance, in a way. When we use types like `State`
-and `Reader` and `Maybe` we reap huge gains in elegance and power;
-what's more, the code is right there on Hackage for us to study and
-understand. IO, however, is mysterious, and we use it as a monad "just
-because". The compiler relies on the monadic context to clearly "demarcate"
-the IO code, which is how it guarantees proper sequencing, and how it
-can safely move values into and out of the pure runtime.
+It's a mode of computation of staggering generality and
+utility. Monadic functions working under `bind` have a 
+different "shape" than normal input-to-output functions. This
+makes radically different modes of computation available to pure code.
+
+Monads and IO
+-------------
+
+Indeed, `IO` is a funny instance in the effectful zoo. When we use
+types like `State` and `Reader` and `Maybe` we reap huge gains in
+elegance and power; what's more, the code is right there on Hackage
+for us to study and understand. 
+
+IO, however, is mysterious. Its guts are buried deep inside GHC. We
+use it as a monad "just because": a program without IO isn't much of a
+program.
+
+Instead, it's the *compiler* getting the main utility from monadic
+control. Through `Monad`, the compiler can ensure that all our `IO`
+commands happen in strict sequence, helping it safely move values in
+and out of the pure runtime.
+
+The good news is that Monad (with its effectful cousins) is a
+fantastic abstraction for IO. It's easy to compose and factor all of
+the effectful types with `IO`, with a little help from something
+called *monad transformers*. 
 
 Binded by the light
 ===================
 
-Working with bind isn't hard once you get used to it. The bind operator,
-`>>=`, is used infix, with a monad inhabitant on the left side, and our
-consuming function on the right. This creates a left-to-right code "motion,"
-as opposed to the right-to-left flow of function composition.
+Working with bind isn't hard once you get used to it. 
+
+The bind operator, `>>=`, is used infix, with a monad inhabitant on
+the left side, and our consuming function on the right. This creates a
+left-to-right code "motion":
 
 > countCharInFileBind :: Char -> FilePath -> IO Int
 > countCharInFileBind c f = 
->   readFile f >>= 
->       \contents -> return (countChar c contents)
+>   readFile f >>= \cs -> return (countChar c cs)
 
 Our function counts how often a character shows up in a text file. 
-We bind "readFile f", of type `IO String`, with a lambda whose argument
-is the `contents` read from the file. In it, we call our pure function `countChar`
-and `return` the result back as `IO Int`. 
+We bind "readFile f", of type `IO String`, with a lambda function.
+It's argument `cs` has the contents of the file from `readFile`. In
+the lambda we call our pure function `countChar`, and `return` the Int
+result back to IO.
 
 With eta reduction, bind makes for some beautiful compositions:
 
 > countCharInFileEta :: Char -> FilePath -> IO Int
 > countCharInFileEta c f = readFile f >>= return . countChar c
 
-You can almost visualize a "pipeline" of the file contents "flowing" into
-`countChar` with `>>=`.
+The infix syntax really shines here, with the `cs` argument composing
+onto the end of `countChar c`. Bind here resembles a "pipeline" of the
+file contents "flowing" into `return . countChar c`.
 
-As we noted above, functions of type `IO ()` are run just for side effects,
-like `putStrLn`. Using normal bind, our lambdas would capture a useless `()` non-value.
-For this case we use `>>` to simply "sequence" the next operation.
+Side-effects only: >>
+---------------------
+
+When we use functions of type `IO ()`, we're only interested in the side
+effects. Nonetheless, we still have to bind to use them, leaving us with
+an unused argument of type `()`. 
+
+An example is `putStrLn`, which writes a line of text to stdout. Let's use
+it to log a message before performing our computation:
+
+> countCharMsgBind :: Char -> FilePath -> IO Int
+> countCharMsgBind c f = 
+>    putStrLn ("count " ++ [c] ++ " in " ++ f) 
+>                 >>= \_ -> readFile f    -- yuck
+>                 >>= return . countChar c
+
+The "`\_ ->`" is pointless. Enter `>>`, a modified bind
+that swallows the useless argument. 
 
 ```
 ghci> :t (>>)
 (>>) :: Monad m => m a -> m b -> m b
 ```
 
-Here we'll use it to log before performing our computation:
+With `>>`, we simply "sequence" the next action.
+
 
 > countCharMsg :: Char -> FilePath -> IO Int
 > countCharMsg c f = 
->    putStrLn ("counting " ++ [c] ++ " in " ++ f) >>
->        readFile f >>= return . countChar c
+>    putStrLn ("count " ++ [c] ++ " in " ++ f) 
+>                 >> readFile f           -- much better!
+>                 >>= return . countChar c
 
-When we want to create local definitions in pure code, we use `where`
-or `let ... in`. In monadic code, though, it gets a little tricky to
-use `where` because of all the closures we're making. A `where` section
-at the end of a bunch of monadic binds won't have any of those binded
-variables in scope. The lambdas can call out to `where` functions, but those
-functions can't "call into" the lambda's arguments.
+Local definitions
+-----------------
 
-`let`/`in` works better, inside of the lambdas. We can stick our definitions
-"above" the code that needs them, and "below" the bound arguments we want to 
-act upon.
+`where` and `let ... in` can be interchanged in pure code as a
+matter of style. In monadic code however, it gets tricky to
+use `where`.
+
+Let's change our logging to output the character count. To do so
+we'll need to capture it in a variable first, so we fire up a 
+`where` clause. Unfortunately, the compiler yells at us.
+
+```haskell
+countCharBroken c f = 
+   readFile f >>= 
+      \cs -> putStrLn ("Counted " ++ show count ++ " chars")
+             >> return count
+   where count = countChar c cs 
+
+posts/Effectful.lhs:332:32-33: Not in scope: ‘cs’ …
+Compilation failed.
+```
+
+As the error shows, the lambda after `readFile f` is not in scope for
+the `where` section. Only `c` and `f` from the top level are in
+scope. There's not really any good place to put the `where`.
+
+`let` and `in` work better, "above" the lambdas that need it.
 
 > countCharLog :: Char -> FilePath -> IO Int
 > countCharLog c f = 
->    readFile f >>= \contents -> 
->        let cc = countChar c contents 
->        in putStrLn ("Counted " ++ show cc ++ " of " ++ [c] ++ " in " ++ f) 
->           >> return cc
+>    readFile f >>= 
+>       \cs -> let count = countChar c cs 
+>              in putStrLn ("Counted " ++ show count ++ " chars") 
+>                 >> return count
 
-Here we use `let` to capture the results of the pure call in order to 
-log it with `putStrLn`, before `return` sends it back to the monadic context.
+
+
 
 Do notation
 ===========
 
-Lots of bind lambdas gets unweildy and confusing eventually. 
-`do` notation offers nice syntax to "clean up" repeated `>>=`, `>>`
-and `let` expressions.
+If you've got a lot of work to do, writing a ton of lambdas
+can get unweildy and confusing. Our simple function `countCharLog`
+has three lambdas; we can easily imagine more.
+
+Enter `do` notation, an alternate syntax for Monads which nicely
+"cleans up" repeated `>>=`, `>>` and `let` expressions.
+
+Here's `countCharLog` rewritten with `do`:
 
 > countCharLogDo :: Char -> FilePath -> IO Int
 > countCharLogDo c f = do
->   contents <- readFile f
->   let cc = countChar c contents
->   putStrLn ("Counted " ++ show cc ++ " of " ++ [c] ++ " in " ++ f)
->   return cc
+>   cs <- readFile f
+>   let count = countChar c cs
+>   putStrLn $ "Counted " ++ show count ++ " chars"
+>   return count
 
-`do` offers the ["draw from"](https://wiki.haskell.org/Keywords#.3C-) operator `<-`,
-which invokes bind under the hood. With it, the argument of the bound 
-lambda function `contents` looks like a "normal" variable assignment of the
-results of `readFile f`, and is in scope for all subsequent "statements".
+Starting from the top, we have "`cs <- readFile f`". `<-` is the ["draw
+from"](https://wiki.haskell.org/Keywords#.3C-) operator, which invokes
+bind under the hood. The argument of the next lambda appears as an "assignment" on
+the left. Subsequent expressions have `cs` in scope, exactly
+like they would be in nested lambdas.
 
-Likewise, `let` in do notation puts an invisible `in` around the following
-expressions. Finally, side-effect-only expressions like `putStrLn` are simply
-"left alone" like they would be in imperative, mutable code.
+Next we define `count` with `let`. No `in` is required: definitions are automatically in scope for subsequent expressions.
 
-Do notation is sometimes characterized as "a way to write
-imperative-style code in Haskell", ostensibly "easier to read" than,
-say, the right-to-left sequencing of function composition. It's better
-to see it as a code-cleaning tool, a way of chaining binds of monadic
-functions and lambdas, oriented toward accumulating variables in
-scope.
+Our side-effect--only expression comes next. We simply 
+issue our `putStrLn` call and proceed to the next line.
+Under the hood, this is sequenced to the following expression with `>>`.
 
-Do reflects the left-to-right orientation of `>>=`. But we can go right-to-left
-with "reverse bind" `=<<`, resulting in code that looks more like function 
-composition.
+If you stare long enough at `countCharLog` and `countCharLogDo`, you'll see
+how `do` notation is simply a reformat of our bind lambdas, leveraging
+newlines to clean up the code.
+
+Just do it
+----------
+
+Do notation has been characterized as a way to "write imperative code
+in Haskell", ostensibly "easier to read" than, say, the right-to-left
+sequencing of function composition. This perhaps explains some of the
+general confusion surrounding Monads, when they are seen as
+"programmable semicolons" or some other broken metaphor about
+imperative coding.
+
+It is far better to see `do` as simply a code-cleaning
+tool. It's a way of chaining binds of monadic functions and lambdas,
+with the left-to-right, top-to-bottom orientation accumulating
+variables in scope. It's a *style*, embedded in syntax. 
+
+Monads don't have to go left-to-right.  "Reverse bind" (`=<<`) can be
+used to write monadic code that flows the other way.
 
 > countCharReverseBind :: Char -> FilePath -> IO Int
 > countCharReverseBind c f = return . countChar c =<< readFile f
+
+This looks more like functional code. However some syntactic gotchas await.
 
 In a pure function, `f` would be a candidate for eta reduction. 
 Unfortunately, the infix precedences of `=<<` and `.` don't play
 nicely, so point-free style gets a little clumsy.
 
-> countCharReverseBindEta :: Char -> FilePath -> IO Int
-> countCharReverseBindEta c = (return . countChar c =<<) . readFile
+> countCharRevBindEta :: Char -> FilePath -> IO Int
+> countCharRevBindEta c = (return . countChar c =<<) . readFile
 
-In the end, "forward bind" works with infix style better, and maps directly
-to `do` sugar. It's thus is more idiomatic.
+"Forward" bind works better with the other infix operators, and maps
+directly to `do` sugar. It's more idiomatic use `>>=` (and `do`) than reverse bind.
 
-Do notation is great. However, until you're really comfortable with monads,
-you should regularly "de-sugar" `do` blocks back into `>>=`, `>>`, `let` and lambdas,
-to make the monadic functionality more explicit and clear.
+Like all sugar, `do` notation gets addictive. Until you're really
+comfortable with monads, you should regularly "de-sugar" `do` blocks
+back into `>>=`, `>>`, `let` and lambdas. This will reveal the monadic
+functionality explicitly.
 
 IO is a Functor 
 ===============
 
-Like all monads, `IO` is also a `Functor` (and `Applicative`)
-instance. It's important to understand how useful IO as a Functor can be!
+Since `IO` is a Monad, it's also a `Functor`, which is horribly useful.
 
-`Functor`'s main function is `fmap`.
+`Functor`'s main function is `fmap`. It looks a lot like Monad's reverse bind.
 
-```
+```haskell
 ghci> :t fmap
-fmap :: Functor f => (a -> b) -> f a -> f b
+fmap :: Functor f => (a -> b)   -> f a -> f b
+ghci> :t (=<<)
+(=<<) :: Monad m  => (a -> m b) -> m a -> m b
 ```
 
-To see it's relationship to Monad, it's illustrative to compare `fmap`
-to Monad's "reverse bind", `=<<`:
+Unlike bind, the function used in `fmap` is "pure": it makes the
+transformation from `a` to `b` without needing to `return` it to the context.
+The Functor implementation itself will lift the `b` result for us "outside".
 
-```
-ghci> :i (=<<)
-(=<<) :: Monad m => (a -> m b) -> m a -> m b
-```
-
-With bind, we act on a monadic value and return it to the Monad's effectful 
-context. `fmap` however is simply about applying a pure function "inside"
-the context. 
-
-The classic operation `map` is well-known in pretty much every
-functional-ish language in existence; it allows you to apply a function
-over the elements of a list, collecting the results in a list.
-In Haskell, `map` is the specialization of `fmap` for lists.
+`fmap` is really the classic functional operation `map`, best known
+as a way to transform all of the elements in a list. 
 
 > incrementAllBy :: Int -> [Int] -> [Int]
 > incrementAllBy i is = fmap (+ i) is 
 
-Many tourists to functional programming learn `map` (and maybe its
-cousin `reduce`/`fold`) as a list operation only before stamping FP
-onto their resume. Haskellers go a lot further with `Functor`.
+```haskell
+ghci> incrementAllBy 2 [1,2,3]
+[3,4,5]
+```
 
-With effectful types like `IO`, `fmap` allows us to "plug in" a pure operation
-into a effectful one. Given some effectful result, we want to transform it
-further, so we 'fmap' the transformation over the effectful action. 
+Many tourists to functional programming learn `map` (and maybe its
+cousin `reduce`/`fold`) as a list operation only, before proudly stamping FP
+onto their resume. Haskellers go a lot further with `Functor`, mapping
+functions over *any* type with the `Functor` shape.
+
+Effectful Functors
+------------------
+
+Wtih the effectful types, `fmap` is insanely useful. It allows
+us to "plug in" a pure operation into an effectful one. 
+
+Bind forces us to
+shape effectful operations differently than pure ones. It can therefore be tempting to see pure
+transformations as in "a different world", confining them to
+`let` clauses or stashing them in other functions altogether. The effectful programmer
+instead uses `fmap` with bind, composing pure transformations
+with an effectful result.
 
 Our char-counting function is an excellent candidate for plugging in `fmap`.
 
 > countCharInFileFmap :: Char -> FilePath -> IO Int
 > countCharInFileFmap c f = fmap (countChar c) (readFile f)
 
-Our effectful code is looking more and more functional. Indeed the only
-indication here that our code has "magic" IO involved is the type: `IO Int`.
+Our code is looking more and more functional -- the only
+indication here that our function is at all impure is the type `IO Int`.
+Let's "follow the types" to see how `fmap` accomplishes this:
 
-Following the types makes it clear what `fmap` is accomplishing:
-
-```
+```haskell
 ghci> :t fmap
 fmap :: Functor f => (a -> b) -> f a -> f b
 
 ghci> :t countChar 'c'
 countChar 'c' :: String -> Int
 
-ghci> :t readFile "path"
+ghci> :t readFile "some string"
 readFile "path" :: IO String
+```
+
+Here, we're using GHCI to examine the types of partially- and
+fully-applied functions. `countChar 'c'` creates a unary function of
+type `String -> Int`, which is suitable for "plugging into"
+`fmap`. Meanwhile, the fully-applied `readFile "some string"` is 
+of type `IO String` -- and IO is a `Functor`.
+
+Putting the types together, we see the resuling type is `IO Int`.
+
+```haskell
 
 ghci> :t fmap (countChar 'c') (readFile "path")
 fmap (countChar 'c') (readFile "path") :: IO Int
 
 ```
 
-Given our effectful operation `readFile f` which returns a `String`,
-`fmap` is used to apply a pure function that converts a `String` to an
-`Int`. This happens *within the effectful context:* no `return` required.
+In short, we use `fmap` to convert our effectful `String` result into an `Int`.
+The pure conversion happens *within the effectful context:* no `return` required.
 
-This combination of `fmap` with a monadic call is so common that the
-infix synonym `<$>` is used to make those pesky parentheses disappear:
+`fmap` has an infix synonym `<$>`, which we can use to make those
+pesky parentheses disappear.
 
 > countCharInFileFmap2 :: Char -> FilePath -> IO Int
 > countCharInFileFmap2 c f = countChar c <$> readFile f
@@ -416,83 +538,89 @@ That's some pretty sweet code right there.
 List is a Monad
 ===============
 
-We've talked a lot about `IO` so far, which is strongly associated
-with Monad, such that Monad is strongly associated with effectful
-code. Let's challenge that now by looking at a highly pure Monad, the
-humble list.
+So far we've focused our Monad/Functor discussion on `IO`, and
+referencing other "effectful" types. It's important however to 
+realize that nothing about Monad or Functor is necessarily effect-related.
+To do this, let's take a quick glance at the humble list type, `[a]`. 
 
-We saw above how `fmap` works on lists, indeed the `map` operation is
-a "Greatest Hit" of functional programming. It's easy to understand
-how a function could be applied to a list's values, with `fmap`
-creating a new list from the results.
+We know already that it's a `Functor`: the `map` operation is
+a "Greatest Hit" of functional programming. Intuitively, we can see
+how to apply a function to every element of a list, creating a new list 
+with the transformed elements. How is it a `Monad` though?
 
-So we understand how list is a `Functor`. How is it a `Monad` though?
-
-`return` is pretty easy to understand, it simply creates a singleton list
+`return` is easy. It simply creates a singleton list
 out of the value. 
 
-```
+```haskell
 ghci> return 1 :: [Int]
 [1]
 ```
 
-Bind is more interesting. Recall that bind takes a function which
-accepts the underlying value, and returns a transformed value into the
-monadic context. With list, the type of bind is `[a] -> (a -> [b]) ->
-[b]`. 
+Bind is more interesting. It's type is "`[a] -> (a -> [b]) -> [b]`":
+the monadic function will take each value of the list, and return
+the transformed result as a list. 
 
-Like `fmap`, the function will receive every value in a separate
-call. Unlike `fmap`, the function has to return the new value as a
-list. Clearly, list's implementation of `bind` will need to
-concatenate these list results to form the new list.
+The result is a new list. Remember though that it's now made of a
+bunch of *list results*, not individual values like `fmap`. Therefore
+the List monad must *concatenate* these results to make the new list.
 
-We can see therefore how Monad offers strictly more powerful
-transformations than Functor: while fmap can only transform an
-individual value "in place", `>>=` can return an empty list, or a list
-with more elements than the original.
+We can see therefore how `Monad` offers strictly *more powerful
+transformations* than `Functor`. `fmap` can only transform an
+individual value "in place", while `>>=` can return an empty list, or a list
+with more elements than the original. Functor is "structure preserving",
+while Monad is "structure transforming".
 
-To illustrate:
+Here's a simple example, using bind to repeat `Int` values as many times
+as the value itself.
 
 > listBindEx :: [Int] -> [Int]
 > listBindEx is = is >>= (\i -> replicate i i)
 
-```
+```haskell
 ghci> listBindEx [1,2,3]
 [1,2,2,3,3,3]
 ```
 
-To make things more interesting, let's look at what it means to bind to
-two lists.
+As we can see, the intermediate values `[1]`, `[2,2]` and `[3,3,3]` have been merged
+to create the final results.
 
-> listBind2 :: [Int] -> [Int] -> [Int]
-> listBind2 is js = is >>= (\i -> js >>= (\j -> [i,j]))
+To make things more interesting, let's look at what it means to bind up
+two lists. We'll use `do` notation to avoid unsightly bind lambdas.
 
-```
-ghci> listBind2 [1,2,3] [5,6]
+> listBindTwo :: [Int] -> [Int] -> [Int]
+> listBindTwo is js = do
+>    i <- is
+>    j <- js
+>    return [i,j]
+
+``` haskell
+ghci> listBindTwo [1,2,3] [5,6]
 [1,5,1,6,2,5,2,6,3,5,3,6]
 ```
 
-If this looks like "list comprehensions", that's exactly correct: list
-formalized as a monad creates list comprehensions. Thus, lists are an
-excellent way to "unlearn" the notion that Monads and do notation are
-somehow akin to imperative programming:
+It looks a lot like "list comprehensions", which is no accident. List
+comprehensions are indeed the Monadic use case for lists. 
 
-> listBind2Do :: [Int] -> [Int] -> [Int]
-> listBind2Do is js = do
->   i <- is
->   j <- js
->   [i,j] 
+Lists are therefore first-class Monads, which is a great way to unseat
+the assumption that Monads are somehow "imperative". In `listBindTwo`,
+it is impossible to interpret `i <- is` happening "before" `j <- js`.
+They are simply two nested lambdas that produce the cartesian result
+of the two lists. How we *declare* functions is not necessarily related
+to how they *fire*.
 
-```
-ghci> listBind2Do [1,2,3] [5,6]
-[1,5,1,6,2,5,2,6,3,5,3,6]
-```
+Conclusion
+==========
 
-As the result shows, there is no way to see `i <- is` happening
-"before" `j <- js` in the `do` code above. The specifics of how list
-implements bind determines the final result, not the order the
-functions are declared. After all, we're just composing functions: how
-they *fire* is not related necessarily to how they are *declared*.
+We've covered a lot of ground, but we're just getting started. 
+
+The next article will turn to the pure effectful types, and introduce
+`Applicative` use cases. We'll look at monad transformers, plus the
+typeclasses surrounding them that make working with transformers so
+much easier.
+
+Finally we'll sew them all together in a fully-working, if trivial, example.
+Stay tuned!
+
 
 Effectful Haskell: Configuration
 ================================

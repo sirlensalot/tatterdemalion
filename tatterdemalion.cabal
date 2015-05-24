@@ -11,5 +11,6 @@ executable site
                   , pandoc
                   , regex-tdfa
                   , tagsoup
+                  , mtl
   ghc-options:      -threaded
   default-language: Haskell2010
