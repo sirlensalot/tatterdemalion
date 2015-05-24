@@ -55,6 +55,12 @@ h2 {
 	text-align: center;
 }
 
+.info {
+    font-size: 80%;
+	font-style: italic;
+    margin-bottom: 30px;
+}
+
 
 
 /* mobile: 21em */

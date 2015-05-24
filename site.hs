@@ -7,11 +7,17 @@ import Text.Pandoc.Options
 import qualified Text.HTML.TagSoup               as TS
 import qualified Data.Map as M
 import Text.Regex.TDFA ((=~~),(=~))
+import Control.Applicative
+import Data.String
+
 
 
 --------------------------------------------------------------------------------
 main :: IO ()
-main = hakyll $ do
+main = map fromString . lines <$> readFile "DRAFTS" >>= \drafts -> hakyll $ do 
+
+    let postsPattern = "posts/*" .&&. complement (fromList drafts)
+    
     match "images/*" $ do
         route   idRoute
         compile copyFileCompiler
@@ -28,13 +34,7 @@ main = hakyll $ do
     match "css/*" $ do
         route   idRoute
         compile compressCssCompiler
-{-
-    match (fromList ["about.rst", "contact.markdown"]) $ do
-        route   $ setExtension "html"
-        compile $ pandocCompiler'
-            >>= loadAndApplyTemplate "templates/default.html" defaultContext
-            >>= relativizeUrls
--}
+
 
     match "posts/*" $ do
         route $ setExtension "html"
@@ -48,7 +48,7 @@ main = hakyll $ do
     create ["archive.html"] $ do
         route idRoute
         compile $ do
-            posts <- recentFirst =<< loadAll "posts/*"
+            posts <- recentFirst =<< loadAll postsPattern
             let archiveCtx =
                     listField "posts" postCtx (return posts) `mappend`
                     constField "title" "Archives"            `mappend`
@@ -63,7 +63,7 @@ main = hakyll $ do
     match "index.html" $ do
         route idRoute
         compile $ do
-            posts <- recentFirst =<< loadAll "posts/*"
+            posts <- recentFirst =<< loadAll postsPattern
             let indexCtx =
                     listField "posts" postCtx (return posts) `mappend`
                     defaultContext
@@ -75,18 +75,11 @@ main = hakyll $ do
 
     match "templates/*" $ compile templateCompiler
 
-pandocOptions = defaultHakyllWriterOptions
---  { writerHTMLMathMethod = MathJax ""
---  }
+
 
 writerOptions = defaultHakyllWriterOptions
                 { writerExtensions = S.delete Ext_literate_haskell 
                   (writerExtensions defaultHakyllWriterOptions)
-                }
-
-readerOptions = defaultHakyllReaderOptions { 
-                  readerExtensions = S.insert Ext_literate_haskell 
-                  (readerExtensions defaultHakyllReaderOptions)
                 }
 
 pandocCompiler' = pandocCompilerWith defaultHakyllReaderOptions writerOptions
@@ -97,6 +90,8 @@ postCtx =
     dateField "date" "%B %e, %Y" 
                   <> teaserField "teaser" "content"
                   <> defaultContext
+
+
 
 
 applyPathMangledClass :: Item String -> Compiler (Item String)
