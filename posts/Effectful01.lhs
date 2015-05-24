@@ -115,18 +115,14 @@ need to break out parentheses:
 > setProducingAction :: IO (Set String)
 > setProducingAction = return $ singleton "contrived"
 
-() is not null
---------------
 
-As we noted above, `IO ()` means the function has no output. `()` is the "unit type",
-which is uninhabitable by any value: nothing can become `()`, and `()` cannot
-be casted or coerced into any other type. 
+As we noted above, `IO ()` means the function has no meaningful
+output. `()` is the "unit type", with the single inhabitant `()`. It allows
+us to return a value from a function (and thus still be "functional",
+as opposed to `void` functions in other languages), but indicate that
+the return value is of no meaning.
 
-As such, it is entirely different from `null` in those *other* languages, where
-it can inhabit any type, and any type can be null, causing bugs aplenty. 
-`()` can never have a value except itself. 
-
-`IO ()` therefore means that we're only executing this action for its side effects.
+`IO ()` indicates we only execute this action for its side effects.
 However, functions like `readFile` are of type `IO String`, meaning "run side-effects
 and give me a `String` result." 
 
@@ -202,7 +198,7 @@ Functions whose type is monadic (their result is of type `Monad x`) are differen
 than your usual function: instead of returning the monad, they "run inside"
 the monadic context, and any values must be "returned" back to the context. 
 
-So to really understand `return`, we have to understand its dual: bind.
+So to really understand `return`, we have to understand its partner in crime, bind.
 
 bind (>>=)
 ----------
