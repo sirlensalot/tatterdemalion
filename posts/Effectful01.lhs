@@ -48,12 +48,10 @@ To write an app, you implement `main :: IO ()`.
 is a one-liner, requiring no imports, and not even a type signature 
 if you're really lazy.
 
-Functions with the famous type signature `IO ()` have zero functional mojo.
-`()` is the empty type, meaning the function returns nothing: side-effects only.
-
-You can use `IO ()` to squander any benefits of strongly-typed functional
-programming, with magical values emerging from the big scary world
-outside the compiler.
+Functions with the famous type signature `IO ()` have zero functional
+mojo; we run them for side-effects only. You can use `IO ()` to
+squander any benefits of strongly-typed functional programming, with
+magical values emerging from the big scary world outside the compiler.
 
 > sendSecret :: IO ()
 > sendSecret = writeFile "/tmp/secret" "Who is Benjamin Disraeli?"
