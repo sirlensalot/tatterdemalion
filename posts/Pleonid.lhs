@@ -252,15 +252,78 @@ a strand with itself, or with other strands.
 
 3. The "polarity" of the cross: over-under or under-over.
 
-![A braid from Pleonid.](figures/pleonid/PleonidBraid00.png)
+![A braid from Pleonid.](figures/pleonid/braid00.png)
+
+In Pleonid, braid notation is used to structure the generation of related musical motives.
+All of the features of a braid are given specific musical meaning. 
+
+Braid dimensions
+----------------
+
+Any braid has a width and a height; the braid in the figure above is of height 7
+and width 21. Like music notation, I interpret the y-axis to be in the pitch domain,
+while the x-axis is time. However, the y-axis does not represent scale degrees,
+but is instead *indexed* to particular pitch values. 
+
+Thus the example has 7 distinct pitches or "degrees" in play. Future
+work will consider the possibility of each strand having its own index
+of 7 values, such that while the strands will all share the same
+"indexing space", the indexed values will vary for each motif. In
+Pleonid, these are indexed to specific pitch values: as such, insofar
+as strands represent different parts, they are all playing in the same
+"key" (modulo transposition).
+
+On the x-axis, time moves consistently forward; in Pleonid these are generally eighth-notes.
+Thus the example is 21 eighths long, perhaps represented as 21/8 time, or 12/8 + 9/8, etc.
+
+Strands vs sequences
+--------------------
+
+In braids, the number of positions or "degrees" does not represent the number of unique
+strands, since the braid is seen as a loop. Thus a braid that starts in position 1 but
+ends in position 2 "continues" into another "frame" of the braid. 
+
+I use the term "sequence" or "strand sequence" to indicate strands
+longer than the braid length, reserving "strand" for the single
+traversal across the braid. While the example has 7 "strands", it has only 3
+"sequences".
+
+![The three sequences of the 7x21 braid.](figures/pleonid/braid00-sequences.png)
+
+The first strand starts and ends at the same, topmost degree, so it
+forms a sequence of one strand. The second strand starts at the second
+degree down, but ends on the third.  It thus continues "into" strand
+three, which itself ends on degree four, continuing again.  Finally
+this strand ends back on the second degree, completing the loop and
+making a sequence of 3 strands, here called sequence 2. The fifth,
+sixth and seventh strands form sequence 3.
 
 
 
 
 
+ while the hor 
 
 
-However I also chose 10 as a register "layout" for the quintet
+
+Pleonid, it takes the following form.
+
+
+The y-axis is generally in the pitch domain,
+With braid notation, I saw a way to generate 
+Braids offer one way to "weave" phrases, motifs with rhythm and melody. With 
+the pitch domain on the y-axis, and time on the x-axis, braid notation 
+offers a form of counterpoint, with over-and-under guiding the phrasing.
+
+There are any number of ways to interpret a braid as music. Pleonid's approach
+is to interpret 
+
+
+
+Instrumentation and Arrangement
+===============================
+
+I also chose 10 as a register "layout" for the quintet
 instrumentation. 10, the "dominant 7" interval, is near the major- and
 minor-sixth interval that makes for sonorous and pleasing
 voicings. Meanwhile each voice ends up with a harmonic/melodic
