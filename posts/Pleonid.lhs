@@ -69,10 +69,10 @@ recursive list comprehensions:
 
 This is a first illustration of the admirable expressiveness of
 functional programming. The corresponding Java code is considerably
-longer and more bug-prone. I give credit to "Cale" on the #haskell IRC
-channel for coming up with the first version of this brilliant
-formation, in response to my desperate plea for help. (There were other
-equally delightful offers, one using monadic list notation).
+longer and more bug-prone. ^[Credit is due to "Cale" on the #haskell
+IRC channel for producing this brilliant formation in response to my
+desperate plea for help. There were other equally delightful offers,
+one using monadic list notation.]
 
 To illustrate, let's take the sequence `C D E F`, whose intervals are `[2,2,1]`.
 The resulting tuples are `[[2,2,1],[2,3],[4,1],[5]]`.
@@ -89,81 +89,75 @@ The Tone Clock
 --------------
 
 The motivation for generating these interval sets, or chords, is to subdivide
-a scale or gamut in a way that will generate interesting and diverse intervallic
-material. The approach used was inspired by procedures invented by the Dutch composer
-Peter Schat which he called the "Tone Clock" (*Toonklok*).
+a scale or gamut in a way to generate diverse yet related intervallic
+material. The approach borrows from by procedures invented by the Dutch composer
+Peter Schat, called the "Tone Clock." ^[Schat, Peter (1993). Also see <http://en.wikipedia.org/wiki/Tone_Clock> and <http://www.peterschat.nl/clockwise.html>. Thanks to Jochem van Dijk for hipping me to it.]
 
-The tone clock represents the 12 distinct triads that can "fit" into
-the 12-tone gamut.  Triads are represented as *normalized, invertible*
-identities. Normalization picks the most compact version, like
-pitch-class sets. Thus the major triad is represented as `(4,3)`, the
-first inversion, instead of the 2nd inversion `(3,5)` or 3rd
-`(5,4)`. They are *invertible* such that the major triad is
-classified with its inverse, the minor triad `(3,4)`.
+The tone clock represents the 12 distinct triads that can be "set"
+into the 12-tone gamut. Triads are identified as *normalized,
+invertible* classes. Thus the major triad is represented as `(4,3)`
+and classified with its inverse, the minor triad `(3,4)`.
 
-In the 12-tone scale, there are only 12 of these triad identities. 
-Schat dubs these the "hours" of the "tone clock", presenting these as
-foundational colors or harmonies to compose with.  He next observes
-that each "hour" has a small number of ways the triad identity can be
-placed in order to saturate all notes of the scale.
+The 12-tone scale has 12 of these triad classes. Schat dubs these the
+"hours" of the "tone clock". Each "hour" has a fixed number of
+configurations by which the triad class can be placed to saturate all
+notes of the scale.
 
-In the case of the major/minor triad identity, hour "IX" on his clock,
-there are only two ways to produce this saturation:
-major/minor/major/minor at `0,2,6,8`, and minor/minor/major/major at
-`0,2,4,6`. Schat dubs these configurations "steerings", as though we are 
-"steering" the intervals through the 12-tone scale.
+In the case of the major/minor triad, hour "IX" on his clock, there
+are exactly two configurations: major/minor/major/minor at `0,2,6,8`,
+and minor/minor/major/major at `0,2,4,6`. Schat calls these
+configurations "steerings", as if we were "steering" the chord
+through the 12-tone gamut.
 
-![Steerings of Hour IX, the major/minor triad identity in the Tone Clock.](figures/pleonid/03-ixSteerings.png)
+![Steerings of "Hour IX", the major/minor triad class in the Tone Clock.](figures/pleonid/03-ixSteerings.png)
 
-Each triad identity "hour" has a similarly fixed number of
-configuration "steerings" possible, resulting in 33 total
-configurations. Each configuration can be seen as producing a tetrad
-of the bottom-note placements. For Schat these tetrads can be related
-to another triad in the "clock" producing a relationship between "hours".
+Each triad class or "hour" has a fixed number of
+configuration "steerings", with 33 total configurations over all classes.
+Each configuration can be seen as producing a tetrad
+of the bottom-note placements. ^[For Schat these tetrads can be related
+intervallically to other triad hours in the clock, producing a relationship between hours.] 
 
 Steerings in Pleonid
 --------------------
 
-Steering can be generalized to apply to any N-ad, not just triads. Clearly
+The classification and steering of a triad can be applied to apply to any N-ad. Clearly
 a dyad or a tetrad can be configured the same way within the scale. Of course,
-with more than 2 intervals, we are no longer simply "inverting" the values
-but *rotating* them, such that for the tetrad `(1,3,2)` we have `(3,2,1)` and
+with more than 2 intervals, we are no longer simply "inverting" the chord
+but *rotating* it, such that for the tetrad `(1,3,2)` we have `(3,2,1)` and
 `(2,1,3)`.
 
 ![Rotations of the tetrad (1,3,2).](figures/pleonid/03a-tetradRotation__small.png)
 
-To apply the operation to other gamuts than 12, relaxing the
-saturation requirement proved to be productive.  Triads combine with
-the 12-gamut very well, in that 3 divides perfectly into 12. Pleonid's
-10-gamut would only allow 5-tuples if they needed to saturate the
-gamut. 
+Likewise, the gamut can be other values than 12. 
 
-By removing this constraint, I was able to "steer" most tuples below
-1/2 the size of the gamut. This still preserves the character of
-overlapping tuple configurations such that their note values do not
-collide. Even so, some chords will not "steer", either because the
-note count is too large, or the intervals do not permit any further
-placements.
+With different chord sizes and gamuts, total saturation (i.e., "using
+up" all of the gamut values with a steering configuration) becomes
+difficult or impossible. In Pleonid this requirement is removed,
+instead searching for *maximal* instead of *total* saturation.
 
-Steering search
----------------
+By relaxing this constraint, I was able to "steer" most tuples below
+1/2 the size of the gamut of 10. Even so, some chords do not
+"steer", either because the note count is too large, or the intervals
+do not permit any further placements.
 
-To steer a tuple, I have to search for all valid placements of a tuple
-in the gamut. I leverage the observation that every N-ad is steered by
-another "M-ad" where `M` is N divided by the gamut. Thus a 5-tuple is
-steered by some dyad (2-tuple) in a 10-gamut.
+Steering algorithm
+------------------
 
-I generate every rotation of every possible normalized M-ad in the
-gamut. For each M-ad, I evaluate every possible configuration of the
-tuple.  With the 5-tuple and dyad example, I would try all 5 rotations
-of the 5 tuple in both "slots", resulting in 25
-configurations. Collisions and duplicates are removed, producing the
-final result, 2 "steerings" or valid configurations.
+The search for all valid configurations of a tuple class in a gamut
+begins with the observation that every N-ad is steered by another
+"M-ad" where `M` is N divided by the gamut. Thus a 5-tuple is steered
+by some dyad (2-tuple) in a 10-gamut.
 
-This is performed for the 15 scale tuples shown above. Only 3 tuples
-are "un-steerable," while the rest were quite productive, producing 49
-distinct steerings. For an example, the 5-tuple `(2,1,2,2)` is found
-to steer into the 10-gamut two ways:
+Thus the search space is every possible "steering" M-ad in the gamut,
+configured with every possible rotation of the N-ad placed in each "slot" 
+in the M-ad. Collisions are invalidated, and duplicates removed, producing
+a final result of valid configurations.
+
+For example, finding all steerings of the 5-tuple `(2,1,2,2)` in a 10-gamut
+means searching every possible dyad (90 total) with every possible 
+rotation (4 total) resulting in 360 candidates. Some optimizations are possible,
+for instance dyads having intervals larger than 1/2 the gamut size are 
+"un-steerable". For this 5-tuple, just 2 steerings are found.
 
 ![Steering (2,1,2,2) in a 10-gamut.](figures/pleonid/05-pleoSteering3.png)
 
@@ -177,28 +171,32 @@ chroma would be identical: a D above the octave "sounds the same" as
 the D below. Here, C# sounds quite different than B, adding new pitch
 information to the composition.
 
+This is performed for the 15 scale tuples shown above. Only 3 tuples
+are "un-steerable," while the rest were quite productive, producing 49
+distinct steerings.
+
 Preserving seed melody features (or not)
 ----------------------------------------
 
-The 49 distinct steerings created have an almost random character,
+The 49 steerings created have an almost random character,
 except for their "source" being an interval derived from the scale
 tuples. To amplify the intervallic character, the steerings are
 filtered by a rule where at least one of the steering tuples must be
-built from the source scale.
+built from the seed scale.
 
-Thus, the steering `[0,2,3,5,7],[4,6,8,9,1]` is allowed, since
-`[0,2,3,5,7]` is in the source scale `[0,2,3,4,5,7]`. Meanwhile, the
+With the `[0,2,3,4,5,7]` seed scale, the steering `[0,2,3,5,7],[4,6,8,9,1]` is allowed, since
+the first tuple `[0,2,3,5,7]` can be built from the seed scale. Meanwhile, the
 steering `[0,1,3,5,7],[2,4,6,8,9]` is discarded, since both tuples
-have notes outside of the source scale. 
+have notes outside of the seed scale. 
 
 This filter reduces the 49 steerings to 32. The tuples then undergo
 a mapping procedure, intended to map any scale tones back to the
 register they appear in the original seed sequence. So for instance, if a
 `G` appears in a chord, it would be mapped to below middle-C.
 
-![Intended mapping of pitches oto original seed sequence.](figures/pleonid/06-mappingCorrect.png)
+![Intended mapping of pitches onto original seed sequence.](figures/pleonid/06-mappingCorrect.png)
 
-This mapping procedure did not go as planned however: a bug in the original
+This mapping procedure did not go as planned however! A bug in the original
 Java code resulted in a more or less random mapping. 
 
 ![Buggy mapping makes for unplanned results.](figures/pleonid/07-mappingIncorrect.png)
@@ -229,96 +227,106 @@ To maximize interest, monotonically increasing or decreasing lines --
 lines that only move in one direction -- are discarded. Interestingly
 this results in only one result filtered. 
 
-This results in 31 lines. These form the foundation of the actual musical
+This results in 31 lines, which form the foundation of the actual musical
 composition. We're ready to create real musical ideas.
 
 Rhythm + Melody = Motif: Braids
 ===============================
 
-Working in the pitch domain lends itself to countless procedures and
-transformations, not to mention endless melodic and harmonic contexts
-to work with. Rhythm puts up more of a resistance to formalization and
-proceduralization. 
+The next step in composing Pleonid is to use the pitch information 
+in the lines to produce rhythmic information. This is accomplished
+by projecting the pitch sequences into a "strand" and using this
+to generate a "braid" of contrapuntally-related motives.
 
-My approach to applying rhythmic structure to melodies is inspired and
-powered by a form of notation used in knot theory in mathmatics, called
-*braid notation*. This allows a normalized knot presentation that
-captures fundamental features: 
+My concept of braids borrows from *knot theory* in mathematics, in which
+idealized knots or braids are formalized as polynomials, and categorized
+by salient features such as how many crosses occur, how many strands 
+are being tied, etc. ^[Knot theory is obscure but has contributions from
+Markov and others, with applications in bioinformatics, fluid mechanics, cryptography. 
+See <http://en.wikipedia.org/wiki/Knot_theory>, <http://en.wikipedia.org/wiki/Braid_group>.]
 
-1. How many distinct strands constitute the braid. You can tie a knot with one or many strands.
+A braid in Pleonid is derived from the "braid representation" of a knot. ^[See <http://katlas.org/wiki/Braid_Representatives> for examples of braid generation from knots in Mathematica.]
+It is a two-dimensional representation, of fixed dimension, where strands cross
+over and under each other as they move horizontally. In Pleonid, all of these
+features are given musical meaning.
 
-2. Where, and how many times, a cross occurs. You can obviously cross
-a strand with itself, or with other strands.
+![A braid from Pleonid. The numbers on the left index the vertical position to pitches.](figures/pleonid/braid_strands_05-20x7.png) 
 
-3. The "polarity" of the cross: over-under or under-over.
+Braid musical features
+----------------------
 
-![A braid from Pleonid.](figures/pleonid/braid00.png)
+A braid is built from "strands" which proceed from left to right; as
+such, each strand represents a voice changing pitch in time. Positions
+on the x-axis are fixed time intervals (like an eighth
+note). Positions on the y-axis are *indexed* to a scale, instead
+of a direct y-axis representation of pitch (ie chromatic).
 
-In Pleonid, braid notation is used to structure the generation of related musical motives.
-All of the features of a braid are given specific musical meaning. 
+In braids, any change in y-position indicates a *cross*, meaning another
+strand must make the complementary change at the same x-position. The cross
+has a particular polarity such that one strand is crossing "over" the other.
 
-Braid dimensions
-----------------
+For musical assignment, an "under" cross is seen as a "hidden" pitch change,
+meaning the previous pitch still plays for that unit of time. An "over" cross
+means an immediate shift to the indexed pitch. 
 
-Any braid has a width and a height; the braid in the figure above is of height 7
-and width 21. Like music notation, I interpret the y-axis to be in the pitch domain,
-while the x-axis is time. However, the y-axis does not represent scale degrees,
-but is instead *indexed* to particular pitch values. 
+Projecting a pitch sequence as a strand
+---------------------------------------
 
-Thus the example has 7 distinct pitches or "degrees" in play. Future
-work will consider the possibility of each strand having its own index
-of 7 values, such that while the strands will all share the same
-"indexing space", the indexed values will vary for each motif. In
-Pleonid, these are indexed to specific pitch values: as such, insofar
-as strands represent different parts, they are all playing in the same
-"key" (modulo transposition).
+The first step is to "project" a pitch sequence as a strand.
+An index is made from the sorted set of all pitches used, so 
+that pitches will be plotted on the y-axis at their index.
 
-On the x-axis, time moves consistently forward; in Pleonid these are generally eighth-notes.
-Thus the example is 21 eighths long, perhaps represented as 21/8 time, or 12/8 + 9/8, etc.
+The first "step" consists of the pitch index and a "weave", which 
+is an instruction to move to the next x-position. The "weave" dictates
+if the next move is UP, DOWN, or FLAT; if not FLAT, it also indicates
+if the move is UNDER or OVER. 
 
-Strands vs sequences
---------------------
+The algorithm locates the next pitch index in the sequence. If
+adjacent to the current index, it assigns an OVER transition with UP
+or DOWN. If the pitch index is the same, it assigns FLAT.
 
-In braids, the number of positions or "degrees" does not represent the number of unique
-strands, since the braid is seen as a loop. Thus a braid that starts in position 1 but
-ends in position 2 "continues" into another "frame" of the braid. 
+If the pitch index is not adjacent, it assigns UNDER, with a direction
+UP or DOWN which will "lead to" the next index. This continues until
+the next pitch index is reached.
 
-I use the term "sequence" or "strand sequence" to indicate strands
-longer than the braid length, reserving "strand" for the single
-traversal across the braid. While the example has 7 "strands", it has only 3
-"sequences".
+The process repeats until the last pitch, which does not need its own
+"step" since the index has already been determined by the steps leading up
+to it. 
 
-![The three sequences of the 7x21 braid.](figures/pleonid/braid00-sequences.png)
+![The source line.](figures/pleonid/10-strandSource__small.png)
 
-The first strand starts and ends at the same, topmost degree, so it
-forms a sequence of one strand. The second strand starts at the second
-degree down, but ends on the third.  It thus continues "into" strand
-three, which itself ends on degree four, continuing again.  Finally
-this strand ends back on the second degree, completing the loop and
-making a sequence of 3 strands, here called sequence 2. The fifth,
-sixth and seventh strands form sequence 3.
+![The strand generated from the source line.](figures/pleonid/strand_05.png)
 
+The resulting rhythmic behavior of the projection turns the pitch sequence
+into a motive. A strange feature of the strand realization is the last pitch.
+Since there is no "step" governing it, it is assigned an "extra" time value.
 
+![The strand realized as motive.](figures/pleonid/11-strandResult.png)
 
+Braid generation from a strand: contrapuntal motives
+----------------------------------------------------
 
-
- while the hor 
-
-
-
-Pleonid, it takes the following form.
-
-
-The y-axis is generally in the pitch domain,
-With braid notation, I saw a way to generate 
-Braids offer one way to "weave" phrases, motifs with rhythm and melody. With 
-the pitch domain on the y-axis, and time on the x-axis, braid notation 
-offers a form of counterpoint, with over-and-under guiding the phrasing.
-
-There are any number of ways to interpret a braid as music. Pleonid's approach
-is to interpret 
+They rules also allow *generation* of contrapuntal motives to go with the
+source strand. 
 
 
+Braid "sequences"
+-----------------
+
+The resulting braids have an interesting property: strands that end
+on a different y-position than where they started "join" with a different
+strand that starts at that position. This is how braids represent *loops*
+in knots. Since loops in music have a different connotation, I called 
+these longer collections of strands "sequences".
+
+
+!["Sequences" of a braid.](figures/pleonid/braid_seqs_05-20x7.png)
+
+
+This adds an interesting dimension to the motifs that can be generated
+by braids. Sequences are not necessarily the same length, but they
+are a multiple of the overall braid x-dimension. This creates
+multi-"bar" motives with shorter motives repeating.
 
 Instrumentation and Arrangement
 ===============================
@@ -328,3 +336,4 @@ instrumentation. 10, the "dominant 7" interval, is near the major- and
 minor-sixth interval that makes for sonorous and pleasing
 voicings. Meanwhile each voice ends up with a harmonic/melodic
 "neighborhood" distinct from the other instruments.
+
