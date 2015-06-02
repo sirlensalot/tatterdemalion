@@ -61,6 +61,12 @@ h2 {
     margin-bottom: 30px;
 }
 
+.caption {
+	margin-left: 30px;
+	margin-right: 30px;
+	font-size: 90%;
+}
+
 
 
 /* mobile: 21em */
