@@ -243,14 +243,16 @@ idealized knots or braids are formalized as polynomials, and categorized
 by salient features such as how many crosses occur, how many strands 
 are being tied, etc. ^[Knot theory is obscure but has contributions from
 Markov and others, with applications in bioinformatics, fluid mechanics, cryptography. 
-See <http://en.wikipedia.org/wiki/Knot_theory>, <http://en.wikipedia.org/wiki/Braid_group>.]
+See <http://en.wikipedia.org/wiki/Knot_theory>.]
 
-A braid in Pleonid is derived from the "braid representation" of a knot. ^[See <http://katlas.org/wiki/Braid_Representatives> for examples of braid generation from knots in Mathematica.]
+A braid in Pleonid is derived from the "braid representation" of a knot. 
 It is a two-dimensional representation, of fixed dimension, where strands cross
-over and under each other as they move horizontally. In Pleonid, all of these
-features are given musical meaning.
+over and under each other as they move horizontally.^[See <http://katlas.org/wiki/Braid_Representatives> for examples of braid generation from knots in Mathematica.] 
 
-![A braid from Pleonid. The numbers on the left index the vertical position to pitches.](figures/pleonid/braid_strands_05-20x7.png) 
+![A braid from Pleonid. The numbers index the vertical position to pitches.](figures/pleonid/braid_strands_05-20x7.png) 
+
+In Pleonid, all of these
+features are given musical meaning.
 
 Braid musical features
 ----------------------
@@ -259,27 +261,28 @@ A braid is built from "strands" which proceed from left to right; as
 such, each strand represents a voice changing pitch in time. Positions
 on the x-axis are fixed time intervals (like an eighth
 note). Positions on the y-axis are *indexed* to a scale, instead
-of a direct y-axis representation of pitch (ie chromatic).
+of a direct y-axis representation of pitch. A chromatic scale would therefore
+reproduce the y-axis values.
 
-In braids, any change in y-position indicates a *cross*, meaning another
-strand must make the complementary change at the same x-position. The cross
-has a particular polarity such that one strand is crossing "over" the other.
+In braids, any change in y-position indicates a *cross*, meaning an adjacent
+strand will make the complementary change at the same x-position. The cross
+has a particular *polarity* such that one strand is crossing "over" the other.
 
-For musical assignment, an "under" cross is seen as a "hidden" pitch change,
-meaning the previous pitch still plays for that unit of time. An "over" cross
+For musical assignment, an `UNDER` cross is seen as a "hidden" pitch change,
+meaning the previous pitch still plays for that unit of time. An `OVER` cross
 means an immediate shift to the indexed pitch. 
 
 Projecting a pitch sequence as a strand
 ---------------------------------------
 
-The first step is to "project" a pitch sequence as a strand.
+To generate a braid, we first "project" a pitch sequence as a *strand*.
 An index is made from the sorted set of all pitches used, so 
 that pitches will be plotted on the y-axis at their index.
 
-The first "step" consists of the pitch index and a "weave", which 
-is an instruction to move to the next x-position. The "weave" dictates
-if the next move is `UP`, `DOWN`, or `FLAT`; if not `FLAT`, it also indicates
-if the move is `UNDER` or `OVER`. 
+Strands are built from "steps" defined as a pitch index value and
+a "weave", which is an instruction for how to move to the next step.
+Weaves indicate if the move is `UP`, `DOWN`, or `FLAT`, as well as 
+whether the move is `UNDER` or `OVER` (for non-`FLAT` weaves). 
 
 The algorithm locates the next pitch index in the sequence. If
 adjacent to the current index, it assigns an `OVER` transition with `UP`
@@ -331,34 +334,46 @@ are coverted to `FLAT`.
 
 ![The resulting braid.](figures/pleonid/braid_strands_01-11x6__small.png)
 
+Thus the full braids are generated. Each strand generated is a different
+motif, but within the same scale, and lasting the same amount of time, as the source strand.
 
 Braid "sequences"
 -----------------
 
-The full braids are now generated, with each strand generating a different
-motif within the same scale as the source line. At this point an interesting
-feature of the braids emerges, which is the representation of a "loop" within
-a braid. A loop is indicated when a strand starts and ends on a different 
-y-position: the ending y-position indicates a *different strand* that "extends"
-the strand. This can continue to include all the strands in a braid; conversely
-a braid can have two or more distinct "loops" formed from strands.
+An key feature of braids is the representation of a *loop* within a
+knot, where a strand "loops back" to make a different cross, potentially with itself
+or a distinct strand.
+ 
+In a braid, a loop is indicated by a strand ending on a different y-position than
+where it starts. This "extends" the strand to the beginning of the strand starting at the end
+position. This continues until a strand's ending position points back at the first strand's
+starting position. ^[The well-formed-ness of braids is a fascinating topic in math, 
+with braids forming a formal group with an identity and an inverse operation. See <http://en.wikipedia.org/wiki/Braid_group>.]
 
 Since "loop" has a different connotation in music, I call these longer,
-joined strands "sequences". 
+joined strands *sequences*. Sequences can consume every strand in a braid,
+or a braid can have two or three sequences, or just one-strand sequences
+with no loops.
 
-!["Sequences" of a braid.](figures/pleonid/braid_seqs_05-20x7.png)
 
-In the image, the strand starting at index 10 ends at index 8, the strand
-at 8 ends at 9, and the strand at 9 ends at 10, completing the loop. Another 
-three-strand loop is built from strands at 6, 5, and 1. Strand 0 stands alone.
-Thus three "sequences" make up the braid in the figure.
+!["Sequences" of a braid.](figures/pleonid/braid_seqs_13-20x7.png)
 
-This adds an interesting dimension to the motifs generated by braids. Clearly,
-sequences are of (potentially) different length, but they will always be a multiple
-of the strand length. This creates multi-"bar" longer motives, with shorter motives repeating
-and "lining up" with the bar length.
+In the figure, the strand starting at index 10 ends at index 9, thus
+looping to the strand at index 9. This strand ends at 10 completing
+the loop as a two-strand sequence. The strand at 8 ends at 8, so it
+is a one-strand sequence. Finally, the strands at 6, 0, 5 and 1 join
+as a 4-strand sequence.
 
-(add illustration of sequence lines)
+Sequences add an interesting "metric" dimension to braids. While
+sequences are potentially of different length, they will always be a multiple
+of the strand length. This creates "multi-bar" longer motives, with the shorter motives repeating at the "bar" interval.
+
+![Braid sequences realized.](figures/pleonid/braid-13.png)
+
+The figure shows a realization of the three sequences from the braid
+above, transposed a 10th apart from each other. The 4-sequence is on the
+top staff, lasting 4 bars. The 1-sequence in the middle repeates 4 times,
+while the 2-seauence on the bottom staff repeats twice.
 
 
 Braid Chords

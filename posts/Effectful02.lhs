@@ -1,28 +1,49 @@
 ----------
-title: Effectful Haskell: Reader
+title: Effectful Haskell: Reader, State, Transformers
 author: Stuart Popejoy
 date: 2015-05-24
 ----------
 
+This article is the second in a series on "effectful" Haskell.  In the
+(last one)[Effectful01.html] we looked at how to work with `IO` as a
+`Monad` and a `Functor`, using bind, `return`, `fmap`, and do
+notation. We also briefly examined the list type as a monad.
+
+The types we'll be examining in this article -- Reader and State --
+are different. They're fully pure types built from "normal" Haskell
+code, requiring no magic from the compiler like `IO`. Yet they offer
+behavior that, in other languages, would be the province of side-effects
+and mutability. They do so by implementing the "effectful trio" of
+Functor/Applicative/Monad.
+
+As nice as these types are, they're even better used together, and with
+IO. To accomplish this, we need *monad transformers* to "stack" them
+together. On the other hand, it's nice to "target" functions at the exact
+effectful behavior we need, instead of using the entire "stack type", so
+we'll want use the particular typeclasses offered (MonadReader, MonadState)
+to keep things tidy. 
+
+If this all sounds too complicated, just remember that "it's all in the types":
+the payoff is tightly-specified application behavior with "no surprises" that
+is just as powerful as any procedural, side-effect--ridden code you'll find. 
 
 > {-# LANGUAGE FlexibleContexts #-}
 > import System.IO
 > import Control.Monad.Reader
+> import Control.Monad.Trans.Reader (Reader)
 > import Control.Applicative
 
 
-Effectful Haskell: Configuration
-================================
+Use case: Configuration
+=======================
 
-Now that we have some idea how to work with Monads and Functors, let's
-start looking at how we can integrate some of the nifty effectful types
-in the Haskell libraries.
+Pretty much any app needs configuration. Whether it comes on the command line
+or from a file, you'll need to get at the information in all sorts of places
+in your code. Factoring this properly can be a challenge in any language.
 
-One "effect" we'd like to have is the ability to read values from an
-environment that is present over all of our function calls. An obvious
-example is accessing a configuration data structure throughout our program. 
-
-Given an example config:
+We'll follow the common practice of defining a data structure around our specific
+config. We won't worry just yet how we inflate it. Here's an example config
+with some contrived properties:
 
 > data AppConfig = AppConfig {
 >     logfile :: FilePath
@@ -30,10 +51,15 @@ Given an example config:
 >   , maxMessageLength :: Int
 > } deriving (Show)
 
+Haskell has magical ways to provide "global variables", such as using an `IORef`
+in IO. There's nothing unsafe about this, but it's unsatisfying. Everything is
+simply in IO, so the types don't help us understand our program or validate its
+correctness.
 
-The most obvious way to read this config is to pass it to every
-function that needs it. Our examples will be a function in IO
-that opens our logfile and writes a preamble:
+Our first attempt, then, is to simply pass our config value into every
+function as an argument. We'll use two contrived functions as examples.
+The first initializes an application log file handle, writing a preamble
+with the application version:
 
 > initLogFile :: String -> AppConfig -> IO Handle 
 > initLogFile preamble config = do
@@ -41,7 +67,10 @@ that opens our logfile and writes a preamble:
 >   hPutStrLn handle (preamble ++ "\nVersion: " ++ version config)
 >   return handle
 
-and a pure function that validates message lengths:
+Our application will also be sending messages that cannot exceed some
+maximum length. So we provide a validation function to be used before
+we send.  It returns the `Either` type, with `Left` canonically
+indicating failure and `Right` success.
 
 > validateMessage :: String -> AppConfig -> Either String ()
 > validateMessage msg config = 
@@ -49,13 +78,12 @@ and a pure function that validates message lengths:
 >      then Left ("Message too long: " ++ msg)
 >      else Right ()
 
-No problem with this, except it's a little ... "manual". We'd prefer
-to *formalize* this practice, as functions
-"participating in a configured environment". Along the way it'd be
-nice to get `config` out of the argument list, since it's not
-really germane to the function's specific job.
+No problem with this, except it's a little ... "manual". Every time we need the config
+value, we're adding it to the argument list ad-hoc. It would be nice to
+*formalize* this, as a way of declaring that these functions share some environment,
+and maybe to get `AppConfig` out of the argument list.
 
-One way to formalize our approach is with a type synonym.
+An initial approach would be to use a type synonym.
 
 > type ConfigReader a = AppConfig -> a
 
@@ -65,16 +93,18 @@ One way to formalize our approach is with a type synonym.
 > validateMessageTS :: String -> ConfigReader (Either String ())
 > validateMessageTS = validateMessage
 
-Our equations prove that the `ConfigReader` type synonym works.  It's
-a light formalization that also hides `AppConfig` from our
-signatures. But, we still have to deal with a `config` argument to
-read any values out, and we have to make sure that argument is the last 
-in the list, etc.
+As the equations prove, we can substitute with our type synonym `ConfigReader`
+and the code still works. We achieve a light formalization and get the explicit
+argument out of the signature. 
 
-To really formalize our approach, we need environment-querying
-functions to just "show up" in our function's scope, with the value
-magically inserted somewhere outside of the argument list. The type
-that implements this magic is called `Reader`.
+It's just for show though. The arguments are
+still there in the original code. Worse, we have to explictly thread the `AppConfig`
+value through any code calling these functions, and stick it in the right position. 
+
+Our ideal solution frees client code from passing variables, and
+implementation code from wrangling them, formalizing our computational
+context as an "environment" with `AppConfig` available to read from.
+The magical type that makes this happen is called `Reader`.
 
 Well, `ReaderT` actually.
 
@@ -82,24 +112,96 @@ ReaderT and the case of the missing monad
 =========================================
 
 A funny thing happened on the way to modern Haskell: some classic
-monads disappeared. `Reader` is one such classic. It's type is `(->
-r)`: it literally formalizes an "extra argument" into a datatype.
+monads disappeared. 
 
-It's also nowhere to be found. All we can find is a type synonym defining 
-it in terms of `ReaderT Identity`. Huh?
+`Reader` is one such classic. It's type is `(-> r)`: it literally
+formalizes an *extra argument* into a datatype. It's exactly what we
+need.
+
+It's also nowhere to be found. The closest we can find is a type synonym defining 
+it in terms of `ReaderT Identity`. 
 
 ```
-ghci> import Control.Monad.Trans.Reader (Reader)
 ghci> :i Reader
 type Reader r = ReaderT r Identity
 ```
 
-Well, it turns out that `Reader` is just a specialization of a more
+It turns out that `Reader` is just a specialization of the more
 general type `ReaderT`, a *monad transformer* that can be
-composed with other effectful types. In the relatively rare case
-that you want to use `Reader` all by itself, the type synonym `Reader`
-fits the bill with the trivial `Identity` monad. Otherwise you'll
-use it in your effectful monad "stack".
+composed with other effectful types. Before we dive into that,
+we'll stay with the type synonym `Reader` to see how far it gets us.
+
+Reader without the T
+--------------------
+
+In pure code, `Reader` gives us exactly what we were looking for:
+functions that can access our config value without explicitly
+including it in our argument list. Let's adapt our function
+`validateMessage` to use Reader:
+
+> validateMsgRdr :: String -> Reader AppConfig (Either String ())
+> validateMsgRdr msg = do
+>   max <- reader maxMessageLength
+>   if (length msg > max)
+>     then return $ Left ("Message too long: " ++ msg)
+>     else return $ Right ()
+
+This is looking pretty cool. No `config` argument to be found, just
+a mysterious function `reader` which seems to get our `maxMessageLength`
+value from the ether. 
+
+The key is the type. `Reader`'s kind is three-star:
+
+```haskell
+ghci> :k Reader
+Reader :: * -> * -> *
+```
+
+We populate the first star with `AppConfig`, which specifies the type
+of value we will want our environment to provide. Types starting with
+`Reader AppConfig` or `ReaderT AppConfig` indicate functions that
+participate in this "configuration environment".
+
+The second star is where our types indicate what a particular
+function's result is. Here, it's `Either String ()`, our validation
+result; a function of type `ReaderT AppConfig Int` would indicate that
+an `Int` value will be computed.
+
+Reader and IO
+-------------
+
+We get into trouble if we want to use `Reader` on a function that
+is already in some other monadic type. `initLogFile`, our other
+example function, is of type `IO Handle`. Now what? 
+
+We could try cramming `IO Handle` into the second term of `Reader`.
+Here's a simplified function that just tries to open the log file:
+
+> openLogFileWeird :: Reader AppConfig (IO Handle)
+> openLogFileWeird = do
+>   f <- reader logfile
+>   return (openFile f WriteMode)
+
+This typechecks, but doesn't cut the mustard. The IO code returned in
+the last line isn't evaluated, but instead returned "un-fired" 
+to the calling function, which would have to bind to this result 
+separately to get the handle. Our `initLogFile` function above
+actually *opened the file* so we could get on with our logging business
+in subsequent code.
+
+Doing the converse -- ie, a type like `IO (Reader AppConfig Handle)` --
+is simply broken: we'd be returning a pure "Reader action" that isn't 
+itself in IO, so it can't open file handles or anything like that. 
+
+Enough nonsense: this is what monad transformers are for, composing 
+monads *together* so we can use them at the same time.
+
+ReaderT: a monad transformer
+============================
+
+
+
+
 
 Monad Transformers
 ------------------
