@@ -5,7 +5,7 @@ date: 2015-05-24
 ----------
 
 This article is the second in a series on "effectful" Haskell.  In the
-(last one)[Effectful01.html] we looked at how to work with `IO` as a
+[last one](Effectful01.html) we looked at how to work with `IO` as a
 `Monad` and a `Functor`, using bind, `return`, `fmap`, and do
 notation. We also briefly examined the list type as a monad.
 
@@ -136,8 +136,9 @@ Reader without the T
 
 In pure code, `Reader` gives us exactly what we were looking for:
 functions that can access our config value without explicitly
-including it in our argument list. Let's adapt our function
-`validateMessage` to use Reader:
+including it in our argument list. 
+
+Here's the pure function `validateMessage` adapted with Reader:
 
 > validateMsgRdr :: String -> Reader AppConfig (Either String ())
 > validateMsgRdr msg = do
@@ -146,103 +147,52 @@ including it in our argument list. Let's adapt our function
 >     then return $ Left ("Message too long: " ++ msg)
 >     else return $ Right ()
 
-This is looking pretty cool. No `config` argument to be found, just
-a mysterious function `reader` which seems to get our `maxMessageLength`
-value from the ether. 
+This is looking pretty cool:
 
-The key is the type. `Reader`'s kind is three-star:
+- The type specifies our context: we "read" from an environment having
+an `AppConfig`; our particular case returns an `Either String ()` value.
+Reader is *three-kinded* (of kind `* -> * -> *`), with the first slot being
+the environment type, and the second slot being the typical monadic "result
+type".
 
-```haskell
-ghci> :k Reader
-Reader :: * -> * -> *
-```
+- There's no pesky `config` argument. We'll see later that functions
+*inside of* ReaderT can call other ReaderT functions with no argument. 
+Functions *outside* of the reader context will have to provide the AppConfig
+value, of course.
 
-We populate the first star with `AppConfig`, which specifies the type
-of value we will want our environment to provide. Types starting with
-`Reader AppConfig` or `ReaderT AppConfig` indicate functions that
-participate in this "configuration environment".
-
-The second star is where our types indicate what a particular
-function's result is. Here, it's `Either String ()`, our validation
-result; a function of type `ReaderT AppConfig Int` would indicate that
-an `Int` value will be computed.
+- Magically, the `reader` function appears in our scope to obtain
+`maxMessageLength` from the AppConfig environment.
 
 Reader and IO
 -------------
 
-We get into trouble if we want to use `Reader` on a function that
-is already in some other monadic type. `initLogFile`, our other
-example function, is of type `IO Handle`. Now what? 
+Clearly our next goal is to apply Reader to our monadic function. 
+However, we'll get into trouble if we use plain `Reader` on a 
+function that's already a monadic type.
 
-We could try cramming `IO Handle` into the second term of `Reader`.
-Here's a simplified function that just tries to open the log file:
+Sticking `IO Handle` into the second term of `Reader` doesn't work.
 
 > openLogFileWeird :: Reader AppConfig (IO Handle)
 > openLogFileWeird = do
 >   f <- reader logfile
 >   return (openFile f WriteMode)
 
-This typechecks, but doesn't cut the mustard. The IO code returned in
-the last line isn't evaluated, but instead returned "un-fired" 
-to the calling function, which would have to bind to this result 
-separately to get the handle. Our `initLogFile` function above
-actually *opened the file* so we could get on with our logging business
-in subsequent code.
+This typechecks, but doesn't do what we want: it returns an *unevaluated
+IO action* -- `(openFile f WriteMode)` -- which defeats the whole purpose
+of running in IO in the first place: we want IO actions to fire "in place".
+Instead we'd be returning a "command" that the calling code would have to
+separately call later.
 
-Doing the converse -- ie, a type like `IO (Reader AppConfig Handle)` --
-is simply broken: we'd be returning a pure "Reader action" that isn't 
-itself in IO, so it can't open file handles or anything like that. 
-
-Enough nonsense: this is what monad transformers are for, composing 
-monads *together* so we can use them at the same time.
+What we really want is to *combine* `IO` and `Reader` into a new
+effectful type. This is precisely what a *monad transformer* is for: providing
+functionality as a "building block" to construct the exact 
+type we need. 
 
 ReaderT: a monad transformer
 ============================
 
-
-
-
-
-Monad Transformers
-------------------
-
-Effectful types are great, but they're even better used together, 
-which is the point of this article. Just because you're in IO doesn't
-mean you don't want to read from config, right? Monad transformers
-allow monads to be "stacked" together, to give you the exact
-computational context you're looking for.
-
-To understand this, it's useful to look at the kinds. Monads are of kind
-`* -> *`, implying they "contain" another type. A Monad Transformer will
-be of kind `(* -> *) -> * -> *`, meaning that in addition to its 
-contained type, it also takes *another Monad* -- the `* -> *` in
-parentheses.
-
-Now, a monad does not have to just be two-kinded. ReaderT, for example,
-needs the type of the environment. So the kind of ReaderT must include
-this.
-
-```
-ghci> :k ReaderT
-ReaderT :: * -> (* -> *) -> * -> *
-```
-
-Looking at that kind, we can start to see what our ReaderT "stack" will look
-like. We want to work in `IO` and read config of type `AppConfig`. Thus
-our type is `ReaderT AppConfig IO`. We've just built a new monad!
-
-```
-ghci> :k ReaderT AppConfig IO
-ReaderT AppConfig IO :: * -> *
-```
-
-OK let's get to work.
-
-Using ReaderT
-=============
-
-Here's our logfile initialization function using ReaderT:
-
+For `initLogFile`, we want to combine IO with Reader functionality, so we'll
+use the `ReaderT` monad transformer.
 
 > initLogFileRT :: String -> ReaderT AppConfig IO Handle
 > initLogFileRT preamble = do
@@ -252,38 +202,88 @@ Here's our logfile initialization function using ReaderT:
 >   liftIO $ hPutStrLn h (preamble ++ "\nVersion: " ++ v)
 >   return h
 
-Effectful Haskell in the house. The computational context is
-expressed as the "return type" of the function; the arguments
-are freed up to express the specific domain of the function itself.
+Nice. Again, our type signature denotes our exact
+context: computing in IO with an `AppConfig` environment to read
+from. Our function produces a `Handle` value, and no "config"
+argument needed. `reader` is used to obtain the `logfile` and `version`
+values.
 
-To access config, we use `reader` which uses the specified accessor
-function on the environment and binds to the value returned. 
+However, our two IO actions `openFile` and `hPutStrLn` now require the
+mysterious function `liftIO` in order to typecheck. To understand this
+we need to dig a little deeper into the type. 
 
+Transformer Kinds
+-----------------
+
+ReaderT has a pretty scary kind signature:
+
+```haskell
+ghci> :k ReaderT
+ReaderT :: * -> (* -> *) -> * -> *
 ```
-ghci> :t reader
-reader :: MonadReader r m => (r -> a) -> m a
+
+Yikes! Don't worry though, it makes more sense as you add the necessary types.
+Like `Reader`, the first "slot" is for the environment type itself, `AppConfig`.
+
+```haskell
+ghci> :k ReaderT AppConfig
+ReaderT AppConfig :: (* -> *) -> * -> *
 ```
 
-ReaderT also has `ask` which returns the entire `AppConfig` value.
+The second term is the parenthesized two stars, `(* -> *)`. This is where we
+place our "stacked" effectful type. As we noted in the previous article,
+Monads, Applicatives and Functors are all *at least* two-kinded: they 
+all "contain" or "operate on" or "produce" the second type. 
 
-liftIO 
------- 
+In this case, we want to use IO, whose kind is of course `* -> *`. So that slots
+right in.
 
-The other change to our code is we had to sprinkle `liftIO` in front
-of our IO functions. This is how the non-transforming `IO` monad
-can work in a stack: its functions must be "lifted" into scope.
+```haskell
+ghci> :k ReaderT AppConfig IO
+ReaderT AppConfig IO :: * -> *
+```
 
-`liftIO` is in the typeclass `MonadIO`, which any monad transformer
-must implement in order to work with `IO`. Thus, here, `liftIO`
-is implemented by `ReaderT` to "lift" the monadic value coming 
-out of IO into the ReaderT context. 
+And voila, we've arrived at a two-kinded, effectful type! We've "built
+our own monad", simply by combining ReaderT and IO. The last slot is for whatever
+value our functions produce: thus `ReaderT AppConfig IO Handle` in the example 
+above.
 
-Indeed, this is the nitty-gritty of transformers. In order for 
-two monads to "stack together", the "outer" monad must be able
-to "lift" all of the operations of the "inner" monad into its
-context. To do so, the "outer" monad must implement some
-typeclass that expresses the API of the inner monad, and provide
-an implementation that "lifts" those operations accordingly.
+All transformers will have a slot for `(* -> *)` where
+we can stick another two-kinded type. Because we just made a 
+new type with this `* -> *` kind, we can stick it in yet another 
+transformer! In this way we can keep building new behavior until
+we have the exact type we need.
+
+Transformers and IO
+-------------------
+
+Like all monad transformers, `ReaderT` is purpose-built to be used with other types.
+Under the hood, this means that it explicitly supports the APIs of a
+known set of other types, in order to "lift" their operations into the 
+transformer's context. The transformer author is tasked with writing a fair
+amount of boilerplate to guarantee this interoperation. The transformer
+*user* on the other hand can mix and match the supported types as needed.
+
+However, `IO` is not a transformer, so it needs a little extra help.
+
+To use IO, a transformer must be an instance of `MonadIO`, in order to provide
+an implementation of `liftIO`. This allows the transformer to "lift" the
+results of an IO action into the transformer's context.
+
+On the user side, we have to sprinkle these `liftIO` calls whenever we want
+to use IO. 
+
+Reader vs ReaderT
+=================
+
+
+
+
+
+
+
+
+
 
 For monad authors, this means a lot of boilerplate. For us monad
 *users*, it's no problem at all. What's more, monad authors
