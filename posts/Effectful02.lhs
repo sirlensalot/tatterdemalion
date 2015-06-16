@@ -1,5 +1,5 @@
 ----------
-title: Effectful Haskell: Reader, State, Transformers
+title: Effectful Haskell: Reader, Transformers, Typeclasses
 author: Stuart Popejoy
 date: 2015-05-24
 ----------
@@ -9,23 +9,19 @@ This article is the second in a series on "effectful" Haskell.  In the
 `Monad` and a `Functor`, using bind, `return`, `fmap`, and do
 notation. We also briefly examined the list type as a monad.
 
-The types we'll be examining in this article -- Reader and State --
-are different. They're fully pure types built from "normal" Haskell
-code, requiring no magic from the compiler like `IO`. Yet they offer
-behavior that, in other languages, would be the province of side-effects
-and mutability. They do so by implementing the "effectful trio" of
-Functor/Applicative/Monad.
+The type we'll be examining in this article, `ReaderT`,
+is fully pure, built from "normal" Haskell
+code, requiring no magic from the compiler like `IO`. It 
+nonetheless does a pretty nifty trick that, in other languages,
+would require global variables, or at least a dependency-injection
+framework.
 
-As nice as these types are, they're even better used together, and with
-IO. To accomplish this, we need *monad transformers* to "stack" them
-together. On the other hand, it's nice to "target" functions at the exact
-effectful behavior we need, instead of using the entire "stack type", so
-we'll want use the particular typeclasses offered (MonadReader, MonadState)
-to keep things tidy. 
-
-If this all sounds too complicated, just remember that "it's all in the types":
-the payoff is tightly-specified application behavior with "no surprises" that
-is just as powerful as any procedural, side-effect--ridden code you'll find. 
+Nonetheless, we'll still want to use it with `IO` and other effectful
+types, so we'll examine how *monad transformers* allow us to "stack" 
+these types into the exact behavior we want. But we'll also allow
+our functions to polymorphically target the exact subset of behavior
+they need, by using the *typeclasses* associated with these types:
+`MonadReader` and `MonadIO`.
 
 > {-# LANGUAGE FlexibleContexts #-}
 > import System.IO
@@ -64,7 +60,7 @@ with the application version:
 > initLogFile :: String -> AppConfig -> IO Handle 
 > initLogFile preamble config = do
 >   handle <- openFile (logfile config) WriteMode
->   hPutStrLn handle (preamble ++ "\nVersion: " ++ version config)
+>   hPutStrLn handle (preamble ++ ", version: " ++ version config)
 >   return handle
 
 Our application will also be sending messages that cannot exceed some
@@ -77,6 +73,9 @@ indicating failure and `Right` success.
 >      if (length msg > maxMessageLength config)
 >      then Left ("Message too long: " ++ msg)
 >      else Right ()
+
+Formalization via type synonyms
+-------------------------------
 
 No problem with this, except it's a little ... "manual". Every time we need the config
 value, we're adding it to the argument list ad-hoc. It would be nice to
@@ -104,7 +103,7 @@ value through any code calling these functions, and stick it in the right positi
 Our ideal solution frees client code from passing variables, and
 implementation code from wrangling them, formalizing our computational
 context as an "environment" with `AppConfig` available to read from.
-The magical type that makes this happen is called `Reader`.
+The type that makes this happen is called `Reader`.
 
 Well, `ReaderT` actually.
 
@@ -138,8 +137,6 @@ In pure code, `Reader` gives us exactly what we were looking for:
 functions that can access our config value without explicitly
 including it in our argument list. 
 
-Here's the pure function `validateMessage` adapted with Reader:
-
 > validateMsgRdr :: String -> Reader AppConfig (Either String ())
 > validateMsgRdr msg = do
 >   max <- reader maxMessageLength
@@ -166,7 +163,7 @@ value, of course.
 Reader and IO
 -------------
 
-Clearly our next goal is to apply Reader to our monadic function. 
+Clearly our next goal is to apply Reader to our function in `IO`. 
 However, we'll get into trouble if we use plain `Reader` on a 
 function that's already a monadic type.
 
@@ -181,7 +178,7 @@ This typechecks, but doesn't do what we want: it returns an *unevaluated
 IO action* -- `(openFile f WriteMode)` -- which defeats the whole purpose
 of running in IO in the first place: we want IO actions to fire "in place".
 Instead we'd be returning a "command" that the calling code would have to
-separately call later.
+explicitly "fire" later.
 
 What we really want is to *combine* `IO` and `Reader` into a new
 effectful type. This is precisely what a *monad transformer* is for: providing
@@ -199,7 +196,7 @@ use the `ReaderT` monad transformer.
 >   f <- reader logfile
 >   v <- reader version
 >   h <- liftIO $ openFile f WriteMode
->   liftIO $ hPutStrLn h (preamble ++ "\nVersion: " ++ v)
+>   liftIO $ hPutStrLn h (preamble ++ ", version: " ++ v)
 >   return h
 
 Nice. Again, our type signature denotes our exact
@@ -274,107 +271,153 @@ On the user side, we have to sprinkle these `liftIO` calls whenever we want
 to use IO. 
 
 Reader vs ReaderT
-=================
+-----------------
 
+`Reader` and `ReaderT` aren't really compatible. As we saw above, `Reader` is but 
+a type synonym for `ReaderT` combined with the `Identity` monad. As such we 
+won't be able to use it with `IO` or any other transformer stacks we cook up.
 
+Fortunately, adapting our pure function to `ReaderT AppConfig IO` is a breeze.
 
+> validateMsgRT :: String -> ReaderT AppConfig IO (Either String ())
+> validateMsgRT msg = vfun <$> reader maxMessageLength
+>   where 
+>     vfun max | length msg > max = Left ("Message too long: " ++ msg)
+>              | otherwise        = Right ()
 
+A breeze, and a nice day for golfing, too! Here we use the fact that
+`ReaderT` (or any Monad or Applicative) is a `Functor` too, to "plug in"
+our pure validation function `vfun` to the `reader` monadic call using 
+the infix synonym for `fmap`, `<$>`. Remember
+that if you have pure code simply to `return` a value, you
+can probably `fmap` instead!
 
+So we're looking pretty good now. We can use `initLogFileRT` and `validateMsgRT`
+in the same "stack": `ReaderT AppConfig IO`. 
 
+The only
+problem is the future. What if we decide later to add another transformer into our stack?
+We'd have to change this already quite long type to `ReaderT AppConfig (Foo Bar (IO ...))`
+anywhere it appears. 
 
+But even in the here and now, it's kind of unfortunate we've bound
+`validateMsgRT` to `IO`.  There's no IO going on in the function after
+all, so it seems a shame to force any calling code to run in IO.
 
+Polymorphic ReaderT
+-------------------
 
-
-For monad authors, this means a lot of boilerplate. For us monad
-*users*, it's no problem at all. What's more, monad authors
-usally maintain a corresponding typeclass that expresses all of the
-monad's core functionality, which is extremely useful.
-
-Transformer Typeclasses
-=======================
-
-We mentioned `MonadIO` above, which is the typeclass expressing "a
-monad that can interoperate with IO". `liftIO` is its sole function,
-to be used with any IO value to lift it into the transformer context.
-
-Such typeclasses exist for all the standard monad/monad transformers.
-`StateT` has `MonadState`, `ErrorT` has `MonadError`, and so on. Unlike
-`MonadIO`, these classes expose the core operations of the monad as
-functions, so you can directly use these functions in a transformer stack. 
-
-For ReaderT, the typeclass is `MonadReader`. 
-
-```
-ghci> :i MonadReader
-class Monad m => MonadReader r (m :: * -> *) | m -> r where
-  ask :: m r
-  local :: (r -> r) -> m a -> m a
-  reader :: (r -> a) -> m a
-```
-
-We described `ask` and `reader` above as the magical API functions
-that read from our environment. `local` is less-used, allowing a 
-scoped modification of the environment.
-
-There's a big bonus to having these typeclasses around, especially
-as our monad stacks get bigger. The typeclasses allow us to "select"
-which functionality we want our functions to participate in. 
-
-How is this useful? Consider our pure validation function above.
-If we adapt it using our concrete monad stack, it's type becomes
-`ReaderT AppConfig IO ()`:
-
-> validateMessageRTIO :: String -> ReaderT AppConfig IO (Either String ())
-> validateMessageRTIO msg = test <$> reader maxMessageLength where
->     test l | length msg > l = Left ("Message too long: " ++ msg)
->            | otherwise      = Right ()
-
-(Recall that `<$>` is infix `fmap`. We're mapping in our pure validation
-function `test` into the monadic read of `maxMessageLength`.)
-
-The big problem here? So much for our "pure" function! It's now tied
-to big bad `IO`, the impurest-est of all. Fortunately, we can use
-typeclass constraints to get IO out of the picture:
+A simple solution is to use a type variable in the two-kinded "slot" of
+`ReaderT`. We can't have any old type in there though. We'll need
+to constrain it to `Monad`, and because of golfing, and that we're not
+using GHC 7.10, a `Functor` too. ^[In GHC 7.10, `Monad` is constrained to
+`Applicative` and `Applicative` to `Functor`, so the `Functor` constraint
+is no longer necessary].
 
 > validateMessageRTM :: (Functor m, Monad m) => 
 >                       String -> ReaderT AppConfig m (Either String ())
-> validateMessageRTM msg = test <$> reader maxMessageLength where
->     test l | length msg > l = Left ("Message too long: " ++ msg)
->            | otherwise      = Right ()
+> validateMessageRTM msg = vfun <$> reader maxMessageLength
+>   where 
+>     vfun max | length msg > max = Left ("Message too long: " ++ msg)
+>              | otherwise        = Right ()
 
-(Remember how I said `Functor` will be a required superclass of `Monad` 
-in GHC 7.10? I haven't upgraded yet, so I have to put `Functor m` in 
-my constraint! The future is bright.)
-
-This is better: `IO` is gone, we just need our stack to operate on
-some Monad/Functor and we've got Reader goodness. 
+Better: `IO` is gone. We just need our stack to operate on
+some Monad/Functor and we're in business.
 
 But we're not done yet: this will only work if `ReaderT` is the
 "outermost" monad on the stack. In other words, we're still concretely
 specifying `ReaderT` itself, which will get us into trouble if
 we don't stack our monads just so.
 
-Not only that, `ReaderT` isn't the only Reader. There's also `RWST`, a
+In fact, `ReaderT` isn't the only Reader. There's also `RWST`, a
 convenience monad transformer that bundles `Reader`, `Writer` and
 `State` into a single monad. It's really not that hard to stack these
 together, but whatever: RWST is a thing, and it's not `ReaderT`: so it
 won't work with `validateMessageRTM`.
 
-However, any stack with `ReaderT` is a stack that implements `MonadReader`.
-`RWST` implements `MonadReader`. The point is, the polymorphism offered
-by the transformer typeclass `MonadReader` gives us most flexibility.
-It's really the most *specific*: in fact we could care less what monad
-is calling us, as long as it's `MonadReader AppConfig`. So we constrain
-to that.
+MonadReader: an effectful typeclass
+===================================
+
+What we want to do instead is *constrain* our function's type to a typeclass,
+instead of explicitly specifying the whole type.
+
+The typeclass `MonadReader` enumerates all of the functionality in `ReaderT`,
+but because its a typeclass, it can be *implemented* by any transformer that
+interoperates with `ReaderT`. 
+
+```haskell
+ghci> :i MonadReader
+class Monad m => MonadReader r (m :: * -> *) | m -> r where
+  ask :: m r
+  local :: (r -> r) -> m a -> m a
+  reader :: (r -> a) -> m a
+  	-- Defined in ‘Control.Monad.Reader.Class’
+instance Monad m => MonadReader r (ReaderT r m)
+  -- Defined in ‘Control.Monad.Reader.Class’
+instance MonadReader r ((->) r)
+  -- Defined in ‘Control.Monad.Reader.Class’
+```
+
+(Note the freakiness of that last instance: yes, *the
+function arrow itself* is an instance of MonadReader.)
+
+Here we see the complete API of `ReaderT`: 
+
+* `ask`, which obtains the entire environment value
+
+* `local`, a more esoteric use case where
+you want to run the `m a` argument in an environment "modified" by the `(r -> r)` function argument
+
+* our good friend `reader`, which applies an accessor function to the environment value.
+
+The signature of the typeclass, `Monad m => MonadReader r (m :: * -> *) | m -> r `, 
+is complex, but not unlike `ReaderT` above. `r` is the environment type; `m` is constrained
+to be an instance of `Monad`, and must be two-kinded. (The last part is functional
+dependency syntax which we won't get into here).
+
+The role of typeclasses in types is to constrain polymorphism. In the signature
+for `MonadReader`, we see the `m` type argument being constrained to `Monad`. In 
+our code, we'll want to constrain our types to `MonadReader`, which will require us
+to supply the `r` type, `AppConfig`:
 
 > validateMessageMR :: (Functor m, MonadReader AppConfig m) => 
 >                      String -> m (Either String ())
-> validateMessageMR msg = test <$> reader maxMessageLength where
->     test l | length msg > l = Left ("Message too long: " ++ msg)
->            | otherwise      = Right ()
+> validateMessageMR msg = vfun <$> reader maxMessageLength
+>   where 
+>     vfun max | length msg > max = Left ("Message too long: " ++ msg)
+>              | otherwise        = Right ()
+
+We're open for business. This function will work with any stack or monad
+we can think of, as long as it provides a `MonadReader AppConfig` environment.
+
+MonadIO
+-------
+
+Indeed, we can extend this polymorphic concept to our IO function too. 
+Of course, this means that we'll want to *additionally constrain* the
+monadic argument to `MonadIO`.
+
+We saw `MonadIO` above with `liftIO`. There, it was allowing `ReaderT`,
+an instance of `MonadIO`, to lift IO operations into its context. Now
+we're going to use the typeclass itself to make our IO function polymorphic.
+
+> initLogFileMR :: (MonadReader AppConfig m, MonadIO m) => 
+>                  String -> m Handle
+> initLogFileMR preamble = do
+>   f <- reader logfile
+>   v <- reader version
+>   h <- liftIO $ openFile f WriteMode
+>   liftIO $ hPutStrLn h (preamble ++ ", version: " ++ v)
+>   return h
+
+Our library is now maximally polymorphic.
 
 Putting it all together
 =======================
+
+
+
+
 
 TODO this section is NOT ready
 
