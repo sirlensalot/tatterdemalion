@@ -18,7 +18,9 @@ framework.
 
 Nonetheless, we'll still want to use it with `IO` and other effectful
 types, so we'll examine how *monad transformers* allow us to "stack" 
-these types into the exact behavior we want. But we'll also allow
+these types into the exact behavior we want. 
+
+We'll also allow
 our functions to polymorphically target the exact subset of behavior
 they need, by using the *typeclasses* associated with these types:
 `MonadReader` and `MonadIO`.
@@ -28,7 +30,8 @@ they need, by using the *typeclasses* associated with these types:
 > import Control.Monad.Reader
 > import Control.Monad.Trans.Reader (Reader)
 > import Control.Applicative
-
+> import System.Environment
+> import Control.Monad.State
 
 Use case: Configuration
 =======================
@@ -97,8 +100,8 @@ and the code still works. We achieve a light formalization and get the explicit
 argument out of the signature. 
 
 It's just for show though. The arguments are
-still there in the original code. Worse, we have to explictly thread the `AppConfig`
-value through any code calling these functions, and stick it in the right position. 
+still there in the original code, and we still have to explictly thread an `AppConfig`
+value through calling code, place it in the right argument order, etc.
 
 Our ideal solution frees client code from passing variables, and
 implementation code from wrangling them, formalizing our computational
@@ -262,12 +265,11 @@ amount of boilerplate to guarantee this interoperation. The transformer
 *user* on the other hand can mix and match the supported types as needed.
 
 However, `IO` is not a transformer, so it needs a little extra help.
-
-To use IO, a transformer must be an instance of `MonadIO`, in order to provide
+To support IO, a transformer must be an instance of `MonadIO`, providing
 an implementation of `liftIO`. This allows the transformer to "lift" the
 results of an IO action into the transformer's context.
 
-On the user side, we have to sprinkle these `liftIO` calls whenever we want
+On the user side, we sprinkle these `liftIO` calls whenever we want
 to use IO. 
 
 Reader vs ReaderT
@@ -329,7 +331,7 @@ But we're not done yet: this will only work if `ReaderT` is the
 specifying `ReaderT` itself, which will get us into trouble if
 we don't stack our monads just so.
 
-In fact, `ReaderT` isn't the only Reader. There's also `RWST`, a
+Indeed, `ReaderT` isn't the only Reader. There's also `RWST`, a
 convenience monad transformer that bundles `Reader`, `Writer` and
 `State` into a single monad. It's really not that hard to stack these
 together, but whatever: RWST is a thing, and it's not `ReaderT`: so it
@@ -410,34 +412,122 @@ we're going to use the typeclass itself to make our IO function polymorphic.
 >   liftIO $ hPutStrLn h (preamble ++ ", version: " ++ v)
 >   return h
 
-Our library is now maximally polymorphic.
+Our library is now maximally polymorphic: our IO function can be used
+by any stack or monad offering both `MonadIO` and `MonadReader AppConfig`,
+while our pure function only needs the `MonadReader AppConfig` requirement.
 
 Putting it all together
 =======================
 
+We've focused on how to write library functions to make use of ReaderT.
+Here we'll write some code to show a working, if contrived, application.
 
-
-
-
-TODO this section is NOT ready
-
-First, we'll define a contrived function to read in our values as a
+First, we'll define a function to read in our values as a
 tuple. Don't try this at home; using Aeson to read values as JSON, or almost
 anything else, is better than this hack.
 
 > readConfig :: FilePath -> IO AppConfig
-> readConfig f = fmap (fromTup . read) (readFile f) 
+> readConfig f = (fromTup . read) <$> (readFile f) 
 >     where fromTup (a,b,c) = AppConfig a b c 
 
 Now we can create a file with the following contents:
 
 ```
-("/tmp/logfile","1.0.0",141)
+("/tmp/logfile","1.0.0",20)
 ```
 
-and `readConfig` will turn it into an `AppConfig`. Note the use of `fmap`
-to apply pure functions to the result of `readFile f`. The function is composed
-from `read`, which converts a String into some type, and our `fromTup` function,
-which takes a tuple and creates an `AppConfig`. Type inference figures
-out the tuple type from the `AppConfig` constructor, which is fed into `read`.
-Typesafe hackery FTW.
+and `readConfig` will turn it into an `AppConfig`. It does so by
+applying the pure functions `read` (which constructs a type value from
+a String value) composed with our local function `fromTup`. Figuring
+out how `read` determines exactly what type to inflate is left as an
+exercise for the reader.
+
+With that, we can write the rest of our little application with
+a `main` function to fire up our monad stack, a `go` function to run inside of it,
+and a utility `logMsg` function.
+
+
+> main :: IO ()
+> main = do
+>   configFile <- head <$> getArgs
+>   config <- readConfig configFile
+>   runReaderT go config
+>
+> go :: (Functor m, MonadReader AppConfig m, MonadIO m) => m ()
+> go = do
+>   h <- initLogFileMR "Starting"
+>   m <- liftIO $ getLine
+>   v <- validateMessageMR m
+>   case v of
+>      (Right ()) -> logMsg h $ "Valid Input" 
+>      (Left err) -> logMsg h $ "Invalid input: " ++ err
+>
+> logMsg :: (MonadIO m) => Handle -> String -> m ()
+> logMsg h = liftIO . hPutStrLn h
+
+All done. Note how `ReaderT` cleans up our code as promised: `go` calls
+`initLogFileMR` and `validateMessageMR` with no config arguments in sight. 
+
+runReaderT
+----------
+
+The `main` function gets us where we need to run our monad stack. 
+
+`getArgs` gets the array of command-line
+arguments, and applies the pure function `head` to get the first one; we pass this to `readConfig` to get an `AppConfig` value.
+
+At this point it's ready to build our monadic stack with `runReaderT`. 
+
+```haskell
+ghci> :t runReaderT
+runReaderT :: ReaderT r m a -> r -> m a
+```
+
+`runReaderT` sounds like we're "running" some code to get monadic magic,
+and looks like it too: the first argument, `ReaderT r m a` is our monadic
+function, and the second, `r`, is our configuration value. In our code,
+we call `runReaderT go config` with `go` being our monadic value.
+
+However, it's important to realize that `runReaderT` is not a typical 
+function but instead an *accessor* to the value contained in a `ReaderT`
+monad.
+
+```haskell
+ghci> :i ReaderT
+newtype ReaderT r (m :: * -> *) a
+  = ReaderT {runReaderT :: r -> m a}
+```
+
+With `runReaderT`, we're "unwrapping" a value, meaning that `go` applied
+with `config` *creates* the monadic value to be used in the underlying code.
+
+In so doing, it also "picks" the type of our polymorphic function. By running
+in IO, and using `runReaderT`, we instruct the type inference to use the
+type `ReaderT Config IO ()` for `go`.
+Indeed, we can call `go` elsewhere to pick a different type for the polymorphic
+function at that site:
+
+> goState :: IO ()
+> goState = evalStateT (runReaderT go emptyConfig) "" 
+>     where emptyConfig = AppConfig "" "" (0 :: Int)
+
+Here our code picks the type `ReaderT AppConfig (StateT String IO) ()`, proving
+that `go` is indeed polymorphic.
+ 
+Miscellany
+---------------------------
+
+Some other notes about our contrived application code:
+
+**Even though we are interested in a pure result, we still have to bind
+to call validateMessageMR**. We can't simply put the call
+to `validateMessageMR` inside of the `case` statement (like we could with
+the non-monadic `validateMessage`) but instead bind to get the result.
+This is because we're using the monadic functionality of `MonadReader AppConfig`.
+
+**logMsg is in MonadIO, not IO**. This is not necessary, but would result
+in both calls to `logMsg` requiring `liftIO`. Functions in MonadIO do not 
+have to be "lifted" inside of a monad transformer stack. Of course, we
+still have to use `liftIO` to call `hPutStrLn` inside of the function.
+
+
