@@ -1,7 +1,7 @@
 ----------
 title: Effectful Haskell: Reader, Transformers, Typeclasses
 author: Stuart Popejoy
-date: 2015-05-24
+date: 2015-08-25
 ----------
 
 This article is the second in a series on "effectful" Haskell. In the
