@@ -123,7 +123,7 @@ Let's keep digging.
 Formalization with a newtype
 ----------------------------
 
-Often in Haskell, a type synonym is often a datatype waiting
+Often in Haskell, a type synonym is a datatype waiting
 to be born. What happens if we simply `newtype` a function that takes an
 environment?
 
@@ -299,29 +299,24 @@ on:
                               in runCR f' c  
 ```
 
-The trick here is we write a *new lambda* that uses the config `c` argument
-to get at the "internals" of both `a` and `f'`, the results of applying `f`.
+The trick here is we write a *new lambda* that uses `runCR` with the lambda's `c` argument
+to get at the "internals" of `a` (as `a'`) and `f'` (the results of applying `f` to `a'`).
+
 
 We're in business. Let's roll.
 
-> validateMessageM :: String -> CReader (Either String ())
-> validateMessageM m = askConfig >>= return . validateMessage m
-
-> initLogFileM :: String -> CReader (IO Handle)
-> initLogFileM p = askConfig >>= return . initLogFile p 
-
 > validateAndInitLogM :: String -> CReader (IO (Maybe Handle))
 > validateAndInitLogM p = do
->    v <- validateMessageM p
+>    v <- validateMessageF p
 >    case v of 
 >      Left err -> return (putStrLn ("Invalid prompt: " ++ p)
 >                        >> return Nothing)
 >      Right () -> do
->         h <- initLogFileM p
+>         h <- initLogFileF p
 >         return (fmap Just h)
 
 
-Now we're cooking with gas.
+Now we're cooking with gas. Note how our Functor-based functions work just fine in the monadic context.
 
 We've built our ideal solution, true formalization of our
 computational context as an "environment" offering `AppConfig` to read
@@ -385,7 +380,7 @@ Now we turn to rewriting our IO function.
 >     hPutStrLn h (preamble ++ ", version: " ++ v)
 >     return h
 
-This looks sweet indeed. We're using `reader` as before, now to access
+This looks sweet indeed. We're using `reader` as before, here to access
 our log filepath and application version. 
 
 However, it has the same problem we alluded to 
@@ -555,8 +550,8 @@ instance MonadReader r ((->) r)
 ```
 
 (Note the freakiness of that last instance: *the
-function arrow itself* is an instance of MonadReader. This reaches its apex
-of generality in the Lens library: "view" slots right into a `MonadReader` stack!)
+function arrow itself* is an instance of MonadReader. ^[This reaches its apex
+of generality in the Lens library: `view` slots right into a `MonadReader` stack, and the `makeClassy` template haskell generates "HasXXX" typeclasses you can use to constrain the `r` type of your MonadReader constraint.])
 
 Here we see the complete API of `ReaderT`: 
 
