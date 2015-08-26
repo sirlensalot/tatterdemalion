@@ -9,18 +9,18 @@ This article is the second in a series on "effectful" Haskell. In the
 `Monad` and a `Functor`, using bind, `return`, `fmap`, and do
 notation. We also briefly examined the list type as a monad.
 
-The type we'll be examining in this article, `ReaderT`, is fully pure,
-built from "normal" Haskell code, requiring no magic from the compiler
-like `IO`. 
+Here we'll be looking at `Reader`, starting with a 
+common use case -- accessing application configuration -- and working
+our way to effectful bliss, starting from first principles.
 
-Of course, we'll still want to use it with `IO` and other effectful
-types, so we'll examine how *monad transformers* allow us to "stack" 
-these types into the exact behavior we want. 
+Once we're there, we'll examine how we can add other types to our
+context, like IO and other monads, using *monad transformers*.
 
-We'll also allow
-our functions to polymorphically target the exact subset of behavior
-they need, by using the *typeclasses* associated with these types:
-`MonadReader` and `MonadIO`.
+We'll also learn how we can design functions that operate on the exact
+subset of monadic functionality we want, by constraining to the
+particular typeclass (e.g., `MonadReader`, `MonadIO`) exposed by a
+given transformer.
+
 
 > {-# LANGUAGE FlexibleContexts #-}
 > import System.IO
@@ -33,11 +33,11 @@ they need, by using the *typeclasses* associated with these types:
 Use case: Configuration
 =======================
 
-Pretty much any app needs configuration. Whether it comes on the command line
+Almost any app needs configuration. Whether it comes on the command line
 or from a file, you'll need to get at the information in all sorts of places
-in your code. Factoring this properly can be a challenge in any language.
+in your code. Factoring this properly can be a challenge.
 
-We'll follow the common practice of defining a data structure around our specific
+We'll follow the common practice of defining a data structure around a specific
 config. We won't worry just yet how we inflate it. Here's an example config
 with some contrived properties:
 
@@ -45,28 +45,25 @@ with some contrived properties:
 >     logfile :: FilePath
 >   , version :: String
 >   , maxMessageLength :: Int
-> } deriving (Show)
+> } deriving (Show, Read)
 
-Haskell has magical ways to provide "global variables", such as using an `IORef`
-in IO. There's nothing unsafe about this, but it's unsatisfying. Everything is
-simply in IO, so the types don't help us understand our program or validate its
-correctness.
+Our first attempt to share this config throughout our application will
+simply pass it to every function that needs it. We'll use two
+contrived functions as examples. 
 
-Our first attempt, then, is to simply pass our config value into every
-function as an argument. We'll use two contrived functions as examples.
-The first initializes an application log file handle, writing a preamble
-with the application version:
+The first initializes an application
+log file handle. It needs the log file path and the version from the config.
 
+> -- | opens a handle as specified in config and writes a preamble.
 > initLogFile :: String -> AppConfig -> IO Handle 
 > initLogFile preamble config = do
 >   handle <- openFile (logfile config) WriteMode
 >   hPutStrLn handle (preamble ++ ", version: " ++ version config)
 >   return handle
 
-Our application will also be sending messages that cannot exceed some
-maximum length. So we provide a validation function to be used before
-we send.  It returns the `Either` type, with `Left` canonically
-indicating failure and `Right` success.
+Our application will also deal with messages that cannot exceed some
+maximum length. We provide a validation function to enforce this, reading
+the maximum length from config.
 
 > validateMessage :: String -> AppConfig -> Either String ()
 > validateMessage msg config = 
@@ -74,20 +71,22 @@ indicating failure and `Right` success.
 >      then Left ("Message too long: " ++ msg)
 >      else Right ()
 
+In both cases, we simply pass the `AppConfig` value in as an argument.
+
 Formalization via type synonyms
 -------------------------------
 
-No problem with this, except it's a little ... "manual". Every time we need the config
-value, we're adding it to the argument list ad-hoc. It would be nice to
-*formalize* this, as a way of declaring that these functions share some environment,
-and maybe to get `AppConfig` out of the argument list.
+No problem with this, but it's a little ... "manual". It would be nice
+to *formalize* needing config, as a way of declaring that these
+functions share some environment.
 
-An initial approach would be to use a type synonym.
+An initial approach is to use a type synonym.
 
 > type ConfigReader a = AppConfig -> a
 
-Our polymorphic type signature specifies a function taking an `AppConfig` value
-and returning some `a`. Let's try it on our API functions:
+This specifies a function that takes an `AppConfig` value and returns
+some `a`. Ending our function signatures with this will unify them
+as having a last argument of type `AppConfig`.
 
 > initLogFileTS :: String -> ConfigReader (IO Handle)
 > initLogFileTS = initLogFile
@@ -97,11 +96,12 @@ and returning some `a`. Let's try it on our API functions:
 
 As the equations prove, our code still works with the type synonym. We
 achieve a light formalization and get the explicit argument out of the
-signature. 
+signature. It's just for show though. We still have to wrangle arguments to
+use the underlying functions. 
 
-It's just for show though, since we still have to wrangle arguments to
-use the underlying functions. If we want to use both functions together,
-we're going to have to explicitly pass the `AppConfig` value to both.
+To illustrate, let's write a function
+to call both of these functions. We'll validate the preamble message,
+and only if it's valid will we initialize the logfile.
 
 > -- validate our prompt before using it to open the logfile
 > validateAndInitLogTS :: String -> ConfigReader (IO (Maybe Handle))
@@ -111,26 +111,27 @@ we're going to have to explicitly pass the `AppConfig` value to both.
 >                     >> return Nothing
 >         Right () -> Just <$> initLogFile prompt config
 
-At this point the code is just confusing: we now have some mystery
-`config` value, which we'd have to reference the definition of `ConfigReader`
-to understand. 
+Our type synonym isn't serving us very well here. We have the mystery
+`config` argument that is obscured by the type synonym, and we have
+to place it in the right spots of our calls to other functions.
 
-Our ideal solution would allow us to code "under" this contract, such
-that all functions sporting the same type can reference this environment
-without having to pass it to and fro.
+Our ideal solution would allow functions to interoperate with a
+"shared environment", such that all functions sporting the same type
+can reference this environment without having to pass it to and fro.
+Let's keep digging.
 
 Formalization with a newtype
 ----------------------------
 
-Often in Haskell, a type synonym is often a data type waiting
+Often in Haskell, a type synonym is often a datatype waiting
 to be born. What happens if we simply `newtype` a function that takes an
 environment?
 
 > newtype CReader a = CReader { runCR :: AppConfig -> a }
 
-The "data" of our new type, `AppConfig -> a`, looks like our type synonym above.
-We've wrapped it in a constructor and given it an accessor `runCR`. (Remember,
-a `newtype` is the same as a `data` but with only one constructor with one field.)
+The "data" of our type, `AppConfig -> a`, looks like our type synonym above.
+We've wrapped a function in a datatype, giving it the accessor `runCR`. ^[Remember,
+a `newtype` is the same as a `data` but with only one constructor with one field.]
 
 Let's try it out in our API:
 
@@ -140,34 +141,40 @@ Let's try it out in our API:
 > validateMessageCR :: String -> CReader (Either String ())
 > validateMessageCR m = CReader $ \c -> validateMessage m c
 
-Hmmm ... OK. How about using both functions at the same time?
+Hmmm ... OK. Not sure how this is better yet. 
 
 > validateAndInitLogCR :: String -> CReader (IO (Maybe Handle))
 > validateAndInitLogCR msg = CReader $ \c -> 
 >     case runCR (validateMessageCR msg) c of
 >         Left err -> putStrLn "Invalid init message" >> return Nothing
 >         Right () -> Just <$> runCR (initLogFileCR msg) c
->
-> -- some example code for how we'd use 'CReader' in, say, main
-> runCRWithConfig :: AppConfig -> IO (Maybe Handle)
-> runCRWithConfig config = runCR (validateAndInitLogCR "Hello CR") config
 
-This code is pretty awkward, but it's an important step forward in our
+This code is pretty awkward! Believe it or not, it's an important step forward in our
 quest for a more elegant solution. 
 
-First, we have a much stronger formalization: functions in `CReader`
-return *a function that takes a config*, wrapped in the `CReader`
+We have a much stronger formalization: functions in `CReader`
+*must return a function that takes a config*, wrapped in the `CReader`
 constructor. Thus every function starts with the lambda `CReader $ \c ->`, followed
 by the code to do stuff. 
 
-Second, to call another function using `CReader`, we use the accessor 
+Application is more unified too. To call another function of type `CReader`, we use the accessor 
 `runCR` to get at the lambda function, and supply the config value `c` to it.
-We've reworked function application here, in that we first call the outer
-function, and then apply our environment to it.
 
-What is nice about this is the consistency of usage: every function under `CReader`
-uses the same code and style to get at, and pass around, the environment. What isn't
-nice is all of the explicit wrapping and unwrapping we have to do.
+What isn't nice is all of the explicit wrapping and unwrapping we have
+to do. Note also that the IO code in `initLogFileCR` no longer runs in that function, or
+in `validateAndInitLogCR`. Instead, they return an IO "action" in pure code that would
+be run after this has all been evaluated. Here's an 
+example usage:
+
+> runCRWithConfig :: AppConfig -> IO Handle
+> runCRWithConfig config = do
+>    let result = runCR (validateAndInitLogCR "Hello CR") config
+>    -- IO action runs here
+>    mh <- result
+>    case mh of Nothing -> error "Log file init failed"
+>               Just h -> return h
+
+We'll see later how we can "mix" IO into our initialization code.
 
 Formalization with Functor
 --------------------------
@@ -181,7 +188,7 @@ CReader :: * -> *
 
 This makes it potentially a candidate for implementing the famous
 trio of Monad, Applicative and Functor! However, we should see if 
-we need all this power. What does Functor offer us?
+we need all this power. What does `Functor`, the humblest of the bunch, offer us?
 
 ```haskell
 ghci> :i Functor
@@ -195,26 +202,25 @@ That sounds like it could be nifty. Let's implement it.
 > instance Functor CReader where
 >     fmap f cr = CReader $ \c -> f (runCR cr c)
 
-Sure enough, it looks a lot like our code above: we use `runCR`
+That looks an awful lot like our code above! We use `runCR`
 to "unwrap" the product of some `CReader a` function, run `f` on
 it, and "wrap" it back up with `CReader -> \c`. 
 
-Let's try to swap out our boilerplate with Functor!
+Let's try to swap out our boilerplate with Functor! Our functions
+will still end with the `CReader ...` type, but we'll 
+use `fmap` to stick our pure functionality into the newtype.
 
-Thing is, `fmap` needs that first `CReader` to get going. If
-we want to use `fmap` for our formalization, we're missing something,
-at least for our baseline API functions that simply want to 
-use the config. Let's use "type holes" to let GHC tell us what we need:
+Only thing is, what are we "fmap-ing" *on*? `fmap` needs to
+operate on some `CReader` value. Let's use "type holes" to let GHC tell us what we need:
 
 ```haskell
+validateMessageF :: String -> CReader (Either String ())
 validateMessageF m = fmap (validateMessage m) _
 ```
 
-Here we've issued `fmap` with the partially-applied function `validateMessage m`.
-Our implementation above had `CReader $ \c -> validateMessage m c`, but why bother
-with that `\c -> ... c` when `validateMessage m` is the same thing? Point-free FTW.
-
-The underscore is a "type hole", so we can figure out the missing piece: it will give us
+Note that `validateMessage m` is the same as `\c -> validateMessage m c`, written
+point-free. This is the function we want inside of `CReader`. The underscore is a "type hole",
+which gives
 an informative error when we try to compile:
 
 ```haskell
@@ -239,8 +245,7 @@ Fortunately that's pretty easy to write:
 > askConfig = CReader id
 
 We called it "askConfig" because we're "asking" the environment
-to return itself. Note we used 'id', the function from base, instead
-of writing `CReader $ \c -> c`. We're ready to get all Functor-y.
+to return itself. (`id` is the same as writing `\c -> c`). We're ready to get all Functor-ific.
 
 > validateMessageF :: String -> CReader (Either String ())
 > validateMessageF m = fmap (validateMessage m) askConfig
@@ -248,7 +253,7 @@ of writing `CReader $ \c -> c`. We're ready to get all Functor-y.
 > initLogFileF :: String -> CReader (IO Handle)
 > initLogFileF p = fmap (initLogFile p) askConfig
 
-This is starting to look pretty good. What about our function
+NICE. This is starting to look pretty good. What about our function
 that wants to use both?
 
 > validateAndInitLogF1 :: String -> CReader (IO (Maybe Handle))
@@ -256,7 +261,7 @@ that wants to use both?
 >     where doInit :: Either String () -> (IO (Maybe Handle))
 >           doInit (Left err) = putStrLn ("Invalid prompt: " ++ p)
 >                               >> return Nothing
->        -- doInit (Right ()) = ???
+>        -- doInit (Right ()) = ??? how do we call initLogFileF ???
 
 Uh-oh. `fmap` can't help us here. In the second pattern-match on `doInit`,
 we somehow need to call `initLogFileF`: *but we don't have the config anymore*.
@@ -265,14 +270,15 @@ implying that we would need to capture the config argument elsewhere.
 
 We're essentially doing control-flow, and Functor isn't the right fit. 
 We could instead fmap a function with `askConfig` that then manually
-supplies config to the underlying functions, but that obviously
+supplies config to `initLogFileF`, but that obviously
 defeats our desire to formalize our computational environment.
 
 Formalization with Monad
 ------------------------
 
 We made some progress with our formalization but ran aground. Let's see 
-what a Monad implementation buys us.
+what a Monad implementation buys us. (Yes, we skipped Applicative. See appendix
+for an implementation.)
 
 > instance Monad CReader where
 >    -- return :: a -> CReader a
@@ -280,12 +286,8 @@ what a Monad implementation buys us.
 >    -- >>= :: CReader a -> (a -> CReader b) -> CReader b
 >    a >>= f = CReader $ \c -> runCR (f ((runCR a) c)) c
 
-NB: my comments "inline" the types of `return` (normally
-`a -> m a`) and bind (normally `m a -> (a -> m b) -> m b`).
-
 `return` is straightforward. Given an `a`, we simply want a `CReader` with
-it wrapped up: `CReader $ \c -> a`. Since we're ignoring the config argument `c`
-we simply use `const` and compose it with the `CReader` constructor.
+the `a` wrapped up: `return a = CReader $ \c -> a`. Point-free, this becomes `CReader . const`.
 
 Bind is tricky. Here's an exploded version to help understand what's going 
 on:
@@ -297,14 +299,8 @@ on:
                               in runCR f' c  
 ```
 
-We take advantage of the fact that a CReader inner function will always supply
-the config, and evaluate the function in `a` with it to get `a'`. Then, we'll
-supply that `a'` to our second argument, `f`, to get a `CReader b`, which we'll
-call `f'`. 
-
-However, we're still inside a lambda inside of a constructor, so that `CReader b`
-needs to be "unwrapped" again to get at its underlying lambda. Thus the last call
-to `runCR` with `f'` and `c`.
+The trick here is we write a *new lambda* that uses the config `c` argument
+to get at the "internals" of both `a` and `f'`, the results of applying `f`.
 
 We're in business. Let's roll.
 
@@ -325,23 +321,25 @@ We're in business. Let's roll.
 >         return (fmap Just h)
 
 
-We've built our ideal solution. It frees client code from passing variables, and
-implementation code from wrangling them, formalizing our computational
-context as an "environment" with `AppConfig` available to read from.
+Now we're cooking with gas.
 
-In fact, we've re-built the classic monad 'Reader'. Replace
-`CReader` with `Reader` and `askConfig` with `ask` and you've
-got one of the greatest hits of effectful types: `Reader`.
+We've built our ideal solution, true formalization of our
+computational context as an "environment" offering `AppConfig` to read
+from. It frees client code from passing variables and implementation
+code from wrangling them.
 
-Well, `ReaderT` actually.
+As you've probably guessed, we've simply re-built the classic monad `Reader` --
+`CReader` is the same as `Reader AppConfig` -- and it's main API function,
+`ask`, which returns the environment value, as `askConfig`. `Reader`
+is a true champ of effectful Haskell.
+
+The only problem with `Reader` is ... it's nowhere to be found.
 
 ReaderT and the case of the missing monad
 =========================================
 
 A funny thing happened on the way to modern Haskell: some classic
-monads disappeared. 
-
-`Reader` is one such classic. The closest we can find is a type synonym defining 
+monads disappeared. In Reader's case, the closest we can find is a type synonym defining 
 it in terms of `ReaderT Identity`. 
 
 ```
@@ -349,18 +347,15 @@ ghci> :i Reader
 type Reader r = ReaderT r Identity
 ```
 
-These days, since monad transformers are strictly more powerful than their
-monad grandparents, the Haskell base libraries just supply the transformer
-version with a type synonym using the trivial monad `Identity` to 
-play the role of the underlying, transformed monad. Indeed, `Reader`
-really is `Identity` with `ReaderT` goodness slathered on top.
+`Reader` is there, but it's pretty hard to understand from this definition.
+Nonetheless, it works as-is, so we'll check it out briefly before diving into
+the "real Reader", `ReaderT`.
 
 Reader without the T
 --------------------
 
-We'll go ahead and ditch the old versions of our code and rewrite
-directly to `Reader` (as opposed to calling out to our previously-defined
-versions).
+Now that we know we like `Reader`, we can ditch our old code and write directly 
+to the monad type.
 
 > validateMsgRdr :: String -> Reader AppConfig (Either String ())
 > validateMsgRdr msg = do
@@ -369,32 +364,43 @@ versions).
 >     then return $ Left ("Message too long: " ++ msg)
 >     else return $ Right ()
 
-Okeydoke. We just inlined `validateMessage` into our `CReader` implementation
-above.
+Instead of using `ask`, we used the function `reader`
+which directly applies an accessor function to the retrieved config. The equivalent
+code would `fmap` the accessor on the ask result: `max <- maxMessageLength <$> ask`.
+
+With monadic `do` style, we can now magically make our config "appear" in the middle
+of our Reader code, via `ask` and `reader`.
 
 Reader and IO
 -------------
 
-Now we turn to rewriting our IO function. However, it's time to address
-a shortcoming in the code above: we return IO "actions"
-wrapped up in `CReader`, which means we won't actually perform any IO
-until we finish our entire sojourn into our configured environment.
+Now we turn to rewriting our IO function. 
 
-> openLogFileRdr :: Reader AppConfig (IO Handle)
-> openLogFileRdr = do
+> initLogFileRdr :: String -> Reader AppConfig (IO Handle)
+> initLogFileRdr preamble = do
 >   f <- reader logfile
->   return (openFile f WriteMode)
+>   v <- reader version
+>   return $ do
+>     h <- openFile f WriteMode
+>     hPutStrLn h (preamble ++ ", version: " ++ v)
+>     return h
 
-What we really want is to *combine* `IO` and `Reader` into a new
-effectful type. This is precisely what a *monad transformer* is for: providing
-functionality as a "building block" to construct the exact 
-type we need. 
+This looks sweet indeed. We're using `reader` as before, now to access
+our log filepath and application version. 
+
+However, it has the same problem we alluded to 
+above: it's not running in `IO`, but instead returning an unevaluated
+IO action (the second `do` section), which would be run sometime later. 
+`Reader` is a monad, but
+so is `IO`, and you can't simply run both "at the same time". 
+
+Or can you? 
 
 ReaderT: a monad transformer
 ============================
 
-For `initLogFile`, we want to combine IO with Reader functionality, so we'll
-use the `ReaderT` monad transformer.
+For `initLogFile`, our intention is to get all IO-rific and open the file right now. 
+It's time to break out the `ReaderT` monad transformer.
 
 > initLogFileRT :: String -> ReaderT AppConfig IO Handle
 > initLogFileRT preamble = do
@@ -404,25 +410,23 @@ use the `ReaderT` monad transformer.
 >   liftIO $ hPutStrLn h (preamble ++ ", version: " ++ v)
 >   return h
 
-Nice. Our function produces a `Handle` value, and no "config"
-argument needed. `reader` is used to obtain the `logfile` and `version`
-values.
+The `reader` calls are unchanged: we're still in Reader-land.
 
-However, our two IO actions `openFile` and `hPutStrLn` now require the
-mysterious function `liftIO` in order to typecheck. To understand this
-we need to dig a little deeper into the type. 
+Our IO actions, however, require the
+mysterious function `liftIO`. To understand this
+we need to dig a little deeper into the type of `ReaderT`. 
 
 Transformer Kinds
 -----------------
 
-ReaderT has a pretty scary kind signature:
+`ReaderT` has a pretty scary kind signature:
 
 ```haskell
 ghci> :k ReaderT
 ReaderT :: * -> (* -> *) -> * -> *
 ```
 
-Yikes! Don't worry though, it makes more sense as you add the necessary types.
+Don't worry, it makes more sense as you add the necessary types.
 Like `Reader`, the first "slot" is for the environment type itself, `AppConfig`.
 
 ```haskell
@@ -430,13 +434,8 @@ ghci> :k ReaderT AppConfig
 ReaderT AppConfig :: (* -> *) -> * -> *
 ```
 
-The second term is the parenthesized two stars, `(* -> *)`. This is where we
-place our "stacked" effectful type. As we noted in the previous article,
-Monads, Applicatives and Functors are all *at least* two-kinded: they 
-all "contain" or "operate on" or "produce" the second type. 
-
-In this case, we want to use IO, whose kind is of course `* -> *`. So that slots
-right in.
+The second term is the parenthesized two stars, `(* -> *)`. This is
+where we place our "stacked" monad. In this case, we want to use IO.
 
 ```haskell
 ghci> :k ReaderT AppConfig IO
@@ -444,28 +443,27 @@ ReaderT AppConfig IO :: * -> *
 ```
 
 And voila, we've arrived at a two-kinded, effectful type! We've "built
-our own monad", simply by combining ReaderT and IO. The last slot is for whatever
+our own monad", simply by combining ReaderT and IO. As usual, the last slot is for whatever
 value our functions produce: thus `ReaderT AppConfig IO Handle` in the example 
 above.
 
-All transformers will have a slot for `(* -> *)` where
-we can stick another two-kinded type. Because we just made a 
-new type with this `* -> *` kind, we can stick it in yet another 
-transformer! In this way we can keep building new behavior until
-we have the exact type we need.
+All transformers will have a slot for `(* -> *)` where we can stick
+another monadic type. Our stack above can thus be put in *another*
+transformer, and on and on. In this way we can keep building new
+behavior until we have the exact computational context we need.
 
 Transformers and IO
 -------------------
 
-Like all monad transformers, `ReaderT` is purpose-built to be used with other types.
+Like all monad transformers, `ReaderT` is purpose-built to be used with other monads.
 Under the hood, this means that it explicitly supports the APIs of a
-known set of other types, in order to "lift" their operations into the 
-transformer's context. The transformer author is tasked with writing a fair
+known set of monads, in order to "lift" their operations into the 
+transformer's context. The transformer *author* is tasked with writing a fair
 amount of boilerplate to guarantee this interoperation. The transformer
 *user* on the other hand can mix and match the supported types as needed.
 
-However, `IO` is not a transformer, so it needs a little extra help.
-To support IO, a transformer must be an instance of `MonadIO`, providing
+However, `IO` is not a transformer. It needs a little extra help.
+To support IO, a transformer author must supply an instance of `MonadIO`, providing
 an implementation of `liftIO`. This allows the transformer to "lift" the
 results of an IO action into the transformer's context.
 
@@ -487,19 +485,16 @@ Fortunately, adapting our pure function to `ReaderT AppConfig IO` is a breeze.
 >     vfun max | length msg > max = Left ("Message too long: " ++ msg)
 >              | otherwise        = Right ()
 
-A breeze, and a nice day for golfing, too! Here we use the fact that
-`ReaderT` (or any Monad or Applicative) is a `Functor` too, to "plug in"
-our pure validation function `vfun` to the `reader` monadic call using 
-the infix synonym for `fmap`, `<$>`. Remember
-that if you have pure code simply to `return` a value, you
-can probably `fmap` instead!
+A breeze, and a nice day for golfing, too. Recall that a pure function can
+always be `fmap`'d into a monadic result -- so we put our pure validation
+code in `vfun` and attach it with `<$>`.
 
-So we're looking pretty good now. We can use `initLogFileRT` and `validateMsgRT`
+Looking pretty good now. We can use `initLogFileRT` and `validateMsgRT`
 in the same "stack": `ReaderT AppConfig IO`. 
 
 The only
 problem is the future. What if we decide later to add another transformer into our stack?
-We'd have to change this already quite long type to `ReaderT AppConfig (Foo Bar (IO ...))`
+We'd have to change this already quite long type to `ReaderT AppConfig (FooT Bar (IO ...))`
 anywhere it appears. 
 
 But even in the here and now, it's kind of unfortunate we've bound
@@ -509,12 +504,11 @@ all, so it seems a shame to force any calling code to run in IO.
 Polymorphic ReaderT
 -------------------
 
-A simple solution is to use a type variable in the two-kinded "slot" of
-`ReaderT`. We can't have any old type in there though. We'll need
-to constrain it to `Monad`, and because of golfing, and that we're not
-using GHC 7.10, a `Functor` too. ^[In GHC 7.10, `Monad` is constrained to
-`Applicative` and `Applicative` to `Functor`, so the `Functor` constraint
-is no longer necessary].
+A simple solution is to use a type variable in the two-kinded "slot"
+of `ReaderT`. We can't have any old type in there though. We'll need
+to constrain it to `Monad`, and because we like `<$>`, `Functor` too. ^[In GHC 7.10, `Monad` is
+constrained to `Applicative` and `Applicative` to `Functor`, so constraining to
+both `Monad` and `Functor` isn't necessary.]
 
 > validateMessageRTM :: (Functor m, Monad m) => 
 >                       String -> ReaderT AppConfig m (Either String ())
@@ -537,15 +531,15 @@ convenience monad transformer that bundles `Reader`, `Writer` and
 together, but whatever: RWST is a thing, and it's not `ReaderT`: so it
 won't work with `validateMessageRTM`.
 
-MonadReader: an effectful typeclass
+MonadReader: a transformer typeclass
 ===================================
 
-What we want to do instead is *constrain* our function's type to a typeclass,
+What we want to do instead is *constrain* our function's type to a *monadic typeclass*,
 instead of explicitly specifying the whole type.
 
 The typeclass `MonadReader` enumerates all of the functionality in `ReaderT`,
 but because its a typeclass, it can be *implemented* by any transformer that
-interoperates with `ReaderT`. 
+has `ReaderT`, `RWST`, or what have you. 
 
 ```haskell
 ghci> :i MonadReader
@@ -560,17 +554,18 @@ instance MonadReader r ((->) r)
   -- Defined in ‘Control.Monad.Reader.Class’
 ```
 
-(Note the freakiness of that last instance: yes, *the
-function arrow itself* is an instance of MonadReader.)
+(Note the freakiness of that last instance: *the
+function arrow itself* is an instance of MonadReader. This reaches its apex
+of generality in the Lens library: "view" slots right into a `MonadReader` stack!)
 
 Here we see the complete API of `ReaderT`: 
 
-* `ask`, which obtains the entire environment value
+* `ask`: get the config, like our `askConfig` for `CReader`
 
 * `local`, a more esoteric use case where
-you want to run the `m a` argument in an environment "modified" by the `(r -> r)` function argument
+you want to run the `m a` argument in an environment "modified" by the `(r -> r)` argument
 
-* our good friend `reader`, which applies an accessor function to the environment value.
+* our good friend `reader`: apply a pure function to the environment.
 
 The signature of the typeclass, `Monad m => MonadReader r (m :: * -> *) | m -> r `, 
 is complex, but not unlike `ReaderT` above. `r` is the environment type; `m` is constrained
@@ -595,13 +590,13 @@ we can think of, as long as it provides a `MonadReader AppConfig` environment.
 MonadIO
 -------
 
-Indeed, we can extend this polymorphic concept to our IO function too. 
+We can extend this polymorphic concept to our IO function too. 
 Of course, this means that we'll want to *additionally constrain* the
 monadic argument to `MonadIO`.
 
 We saw `MonadIO` above with `liftIO`. There, it was allowing `ReaderT`,
 an instance of `MonadIO`, to lift IO operations into its context. Now
-we're going to use the typeclass itself to make our IO function polymorphic.
+we're going to use the typeclass itself to support any stack built off IO.
 
 > initLogFileMR :: (MonadReader AppConfig m, MonadIO m) => 
 >                  String -> m Handle
@@ -619,7 +614,7 @@ while our pure function only needs the `MonadReader AppConfig` requirement.
 Putting it all together
 =======================
 
-We've focused on how to write library functions to make use of ReaderT.
+We've focused on how to write library functions to make use of `ReaderT`.
 Here we'll write some code to show a working, if contrived, application.
 
 First, we'll define a function to read in our values as a
@@ -636,14 +631,13 @@ Now we can create a file with the following contents:
 ("/tmp/logfile","1.0.0",20)
 ```
 
-and `readConfig` will turn it into an `AppConfig`. It does so by
-applying the pure functions `read` (which constructs a type value from
-a String value) composed with our local function `fromTup`. Figuring
-out how `read` determines exactly what type to inflate is left as an
-exercise for the reader.
+and `readConfig` will turn it into an `AppConfig`. It composes the
+pure function `read` (which constructs a type value from a String
+value) with our local function `fromTup`. Type inference figures out
+what `read` is inflating; the reader is encouraged to figure it out too.
 
-With that, we can write the rest of our little application with
-a `main` function to fire up our monad stack, a `go` function to run inside of it,
+With that, we can write the rest of our little application:
+a `main` function to fire up our monad stack; a `go` function to run inside of it;
 and a utility `logMsg` function.
 
 
@@ -656,41 +650,36 @@ and a utility `logMsg` function.
 > go :: (Functor m, MonadReader AppConfig m, MonadIO m) => m ()
 > go = do
 >   h <- initLogFileMR "Starting"
->   m <- liftIO $ getLine
->   v <- validateMessageMR m
->   case v of
->      (Right ()) -> logMsg h $ "Valid Input" 
->      (Left err) -> logMsg h $ "Invalid input: " ++ err
+>   forever $ do
+>      liftIO $ putStr $ "Your message: "
+>      m <- liftIO $ getLine
+>      v <- validateMessageMR m
+>      case v of
+>             (Right ()) -> logMsg h $ "Valid Input" 
+>             (Left err) -> logMsg h $ "Invalid input: " ++ err
 >
 > logMsg :: (MonadIO m) => Handle -> String -> m ()
-> logMsg h = liftIO . hPutStrLn h
+> logMsg h = liftIO . hPutStrLn h 
 
-All done. Note how `ReaderT` cleans up our code as promised: `go` calls
-`initLogFileMR` and `validateMessageMR` with no config arguments in sight. 
 
 runReaderT
 ----------
 
-The `main` function gets us where we need to run our monad stack. 
+The `main` function loads our config file in order to launch the monad
+"stack."  `getArgs` obtains the array of command-line arguments, and
+applies the pure function `head` to get the first one; we pass this to
+`readConfig` to get an `AppConfig` value.
 
-`getArgs` gets the array of command-line
-arguments, and applies the pure function `head` to get the first one; we pass this to `readConfig` to get an `AppConfig` value.
-
-At this point it's ready to build our monadic stack with `runReaderT`. 
+With config, we're ready to fire it up with `runReaderT`.
 
 ```haskell
 ghci> :t runReaderT
 runReaderT :: ReaderT r m a -> r -> m a
 ```
 
-`runReaderT` sounds like we're "running" some code to get monadic magic,
-and looks like it too: the first argument, `ReaderT r m a` is our monadic
-function, and the second, `r`, is our configuration value. In our code,
-we call `runReaderT go config` with `go` being our monadic value.
-
-However, it's important to realize that `runReaderT` is not a typical 
-function but instead an *accessor* to the value contained in a `ReaderT`
-monad.
+`runReaderT` is very similar to `runCR` for `CReader`. It's an accessor to 
+the function powering the Reader magic. However, here, instead of returning
+a simple value, it's returning whatever monad is running "outside" of ReaderT.
 
 ```haskell
 ghci> :i ReaderT
@@ -698,14 +687,17 @@ newtype ReaderT r (m :: * -> *) a
   = ReaderT {runReaderT :: r -> m a}
 ```
 
-With `runReaderT`, we're "unwrapping" a value, meaning that `go` applied
-with `config` *creates* the monadic value to be used in the underlying code.
+It's a confusing concept that "using an accessor function" like `runReaderT` would somehow
+construct our monad. Calling `runReaderT go config` makes sense when you 
+consider that `go` is itself a monadic value, in this case a function that wants
+us to apply the config environment to it. The accessor runs the entire ReaderT stack
+and "pulls out" it's result, which in this case is an IO action.
 
-In so doing, it also "picks" the type of our polymorphic function. By running
-in IO, and using `runReaderT`, we instruct the type inference to use the
-type `ReaderT Config IO ()` for `go`.
-Indeed, we can call `go` elsewhere to pick a different type for the polymorphic
-function at that site:
+However, since `go` is in fact a polymorphic type, `runReaderT` also "picks the
+type" of `go` for this use case. This, plus the fact we're running in IO (in `main`),
+fixes the type of `go` to `ReaderT AppConfig IO ()`.
+
+Indeed, we could call `go` elsewhere with a different monad stack:
 
 > goState :: IO ()
 > goState = evalStateT (runReaderT go emptyConfig) "" 
@@ -713,113 +705,83 @@ function at that site:
 
 Here our code picks the type `ReaderT AppConfig (StateT String IO) ()`, proving
 that `go` is indeed polymorphic.
+
+In `go`, we loop forever, reading input, and logging validation results on it.
+
+```
+ghci> :main "etc/effectful02/config.txt"
+Your message: Hello
+Your message: sdlafjhaslkfjahsflkjasdflkjsdahf
+Your message: ^C^C Interrupted.
+ghci> readFile "/tmp/logfile" >>= putStrLn
+Starting, version: 1.0.0
+Valid Input
+Invalid input: Message too long: sdlafjhaslkfjahsflkjasdflkjsdahf
+```
  
-Miscellany
----------------------------
+Conclusion
+==========
 
-Some other notes about our contrived application code:
+We started with a use case and ended up with a transformer stack. Going forward,
+you'll want to experiment with all of the "greatest hits" of monad transformers,
+namely `StateT`, but also `MonadError` (to encode your error-throwing logic, instead
+of blindly throwing IO errors everywhere), and other nifty things out there 
+like logger transformers.
 
-**Even though we are interested in a pure result, we still have to bind
-to call validateMessageMR**. We can't simply put the call
-to `validateMessageMR` inside of the `case` statement (like we could with
-the non-monadic `validateMessage`) but instead bind to get the result.
-This is because we're using the monadic functionality of `MonadReader AppConfig`.
+Libraries like the Snap web framework also offer transformers (MonadSnap) to
+allow you to factor your code for whether it needs to interoperate with serving
+web requests.
 
-**logMsg is in MonadIO, not IO**. This is not necessary, but would result
-in both calls to `logMsg` requiring `liftIO`. Functions in MonadIO do not 
-have to be "lifted" inside of a monad transformer stack. Of course, we
-still have to use `liftIO` to call `hPutStrLn` inside of the function.
+Hopefully this also makes implementing Functor and Monad (and Applicative too, see
+appendix) less scary. It's not something you have to do every day but it's good
+to be familiar with the wrapping and unwrapping that goes on in these implementations.
 
-Under the hood: Looking at the source of ReaderT
-================================================
+But most importantly, use `ReaderT`! It's stupidly useful, and combined with some
+of the concepts from the `lens` library, can be amazingly flexible.
 
-This article is focused on operational usage of ReaderT, in order to give a taste
-of how code can be written and factored in a real-world application. However, there's
-no reason not to examine how `ReaderT` works, using the code on Hackage.
 
-The meat of ReaderT is the newtype itself:
+Appendix: Applicative CReader
+=============================
 
-```haskell
-newtype ReaderT r m a = ReaderT {
-        runReaderT :: r -> m a
-}
-```
+The article doesn't have a good use case for Applicative, but since
+GHC 7.10 will require one, let's go ahead and implement it to try it out.
 
-The newtype contains `r -> m a`, a function taking the environment `r` value and
-returning an `a` value contained in the underlying/transformed monad `m`.
-
-Thus, a function of type `ReaderT r m a` has *encoded* a hidden argument
-into itself. For example, a function that takes an Int and works in ReaderT
-would have the type `Int -> ReaderT r m a`; we can conceptually inline this 
-type as `Int -> (r -> m a)`, meaning that once we apply an `Int` argument, 
-we're left with a function that takes an `r` argument and returns `m a`.
-
-This is why
-we invoke runReaderT with the environment argument *last*, as seen above
-with `runReaderT go config`: `go` is fixed to the type `ReaderT AppConfig IO ()`,
-which means `go` is a newtype wrapping `AppConfig -> IO ()`. We provide `config`
-to `go` and get `IO ()` coming out of `runReaderT`.
-
-Note that *within* our ReaderT functions, we don't want to be
-directly manipulating this function, say by constructing a new 
-
-It's important not to confuse the newtype with a type synonym of
-`r -> m a`. A type synonym would not allow us to define unique instances
-of `Monad`, `MonadTrans` and `MonadIO` which are what allow us to get effectful
-work done in the function. We could abuse the ReaderT type and write the following
-function:
-
-> broken :: ReaderT String IO ()
-> broken = ask >>= liftIO . putStrLn >> ReaderT (const (return ()))
->
-> useless :: ReaderT String IO ()
-> useless = ask >>= liftIO . putStrLn >> broken
-
-This typechecks, but we have no access to any of the monadic goodness. The
-only way to *use* ReaderT is to "leave the newtype alone", letting it's various
-instances "rebuild" the resulting `r -> m a` function to pass along the 
-results we want.
-
-MonadTrans instance
--------------------
-
-First and foremost, ReaderT needs to support other monadic contexts via `lift`:
+Applicative allows for "effectful function application", with `<*>` standing
+in for whitespace-between-arguments, and `<$>` standing in for `$`.
+For instance, `mod 7 4` can be performed on list singletons (since lists are
+Applicative) as `mod <$> [7] <*> [4]`.
 
 ```haskell
-instance MonadTrans (ReaderT r) where
-    lift   = liftReaderT
-
-liftReaderT :: m a -> ReaderT r m a
-liftReaderT m = ReaderT (const m)
+ghci> mod <$> [7] <*> [4]
+[3]
 ```
 
-As the type of `liftReaderT` shows, we are literally taking a `m a` 
-
-The newtype however means
-that 
-
- However, because the newtype
-encapsulates the last function arrow, all of the instances on the newtype
-will be "rebuilding" the enclosed function, basically preventing the 
-implementing function from directly accessing the argument.
-
-The accessor function in the newtype acts as the "runner" of the monad stack,
-since by "accessing" the result `m a` value we're basically completing our
-monadic operation, providing the environment value `r` as an argument.
-
-
-
- built of a function taking the Reader's environment, `r`, that
-returns something in the underlying `m a` monad type. The reason we use the 
-accessor `runReaderT` to "launch" a function in ReaderT is simply to "extract"
-the `m a` value when we're done, providing the environment value `r`.everything done within this runReaderT invocation
-will happen via bind, `lift` and `return`.
-
-Let's take a look at `lift` next, since this is a transformer after all.
+We implement the two essential class methods: `pure`, which lifts bare values into the Applicative context, generally identical to `return` for Monad; and `<*>`, which is just like `fmap` except the function argument is *itself* in the Applicative context.
 
 ```haskell
-instance MonadTrans (ReaderT r) where
-    lift   = liftReaderT
+ghci> :t fmap
+fmap :: Functor f => (a -> b) -> f a -> f b
+ghci> :t (<*>)
+(<*>) :: Applicative f => f (a -> b) -> f a -> f b
+ghci> :t pure
+pure :: Applicative f => a -> f a
 ```
 
+> instance Applicative CReader where
+>     pure = return
+>     (CReader f) <*> (CReader a) = CReader $ \c -> (f c) (a c)
+
+`pure` is self-explanatory. For `<*>`, much like the `bind` implementation above, we simply apply the `c` from the outer lambda to the
+contained function argument `f` and applied value `a`, and wrap the result of applying one to the other into the new `CReader` value.
+
+A contrived usage is to trim the app version String to the max message length.
+
+> trimVersion :: CReader String
+> trimVersion = take <$> fmap maxMessageLength askConfig 
+>                    <*> fmap version askConfig
+
+```haskell
+ghci> runCR trimVersion (AppConfig "logfile" "Version 1.0 build 323451" 11)
+"Version 1.0"
+```
 
