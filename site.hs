@@ -88,9 +88,12 @@ pandocCompiler' = pandocCompilerWith defaultHakyllReaderOptions writerOptions
 postCtx :: Context String
 postCtx =
     dateField "date" "%B %e, %Y" 
+                  <> boolField "isLhs" (endsWith "lhs" . toFilePath . itemIdentifier)
+                  <> pathField "fpath"
                   <> teaserField "teaser" "content"
                   <> defaultContext
 
+endsWith s = (s ==) . reverse . take (length s) . reverse 
 
 
 
