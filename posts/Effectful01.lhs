@@ -96,7 +96,7 @@ IO
 ==
 
 IO in haskell is famously a Monad, but first and foremost, it's just
-another *type*. It's kind is `* -> *`. ^[See [this article](2015-04-10-Types.html) for an intro to kinds.]
+another *type*. Its kind is `* -> *`. ^[See [this article](2015-04-10-Types.html) for an intro to kinds.]
 
 ```haskell
 ghci> :k IO
@@ -237,7 +237,7 @@ elegance and power; what's more, the code is right there on Hackage
 for us to study and understand. 
 
 IO, however, is mysterious. Its guts are buried deep inside GHC. We
-use it as a monad "just because": a program without IO isn't much of a
+use it as a monad "just because" -- a program without IO isn't much of a
 program.
 
 Instead, it's the *compiler* getting the main utility from monadic
@@ -352,7 +352,7 @@ Do notation
 ===========
 
 If you've got a lot of work to do, writing a ton of lambdas
-can get unweildy and confusing. Our simple function `countCharLog`
+can get unwieldy and confusing. Our simple function `countCharLog`
 has three lambdas; we can easily imagine more.
 
 Enter `do` notation, an alternate syntax for Monads which nicely
@@ -456,7 +456,7 @@ functions over *any* type with the `Functor` shape.
 Effectful Functors
 ------------------
 
-Wtih the effectful types, `fmap` allows
+With the effectful types, `fmap` allows
 us to "plug" a pure operation into an effectful one. 
 
 Bind forces us to
@@ -492,7 +492,7 @@ type `String -> Int`, which is suitable for "plugging into"
 `fmap`. Meanwhile, the fully-applied `readFile "path"` is 
 of type `IO String` -- and IO is a `Functor`.
 
-Putting the types together, we see the resuling type is `IO Int`.
+Putting the types together, we see the resulting type is `IO Int`.
 
 ```haskell
 
