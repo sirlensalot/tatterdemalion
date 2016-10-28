@@ -7,7 +7,7 @@ executable site
   main-is:          site.hs
   build-depends:    base == 4.*
                   , containers
-                  , hakyll == 4.6.*
+                  , hakyll
                   , mtl
                   , pandoc
                   , regex-tdfa

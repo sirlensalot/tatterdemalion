@@ -1,9 +1,10 @@
+{-# LANGUAGE FlexibleContexts #-}
 --------------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
-import           Data.Monoid 
+import           Data.Monoid
 import           Hakyll
 import qualified Data.Set as S
-import Text.Pandoc.Options 
+import Text.Pandoc.Options
 import qualified Text.HTML.TagSoup               as TS
 import qualified Data.Map as M
 import Text.Regex.TDFA ((=~~),(=~))
@@ -14,10 +15,10 @@ import Data.String
 
 --------------------------------------------------------------------------------
 main :: IO ()
-main = map fromString . lines <$> readFile "DRAFTS" >>= \drafts -> hakyll $ do 
+main = map fromString . lines <$> readFile "DRAFTS" >>= \drafts -> hakyll $ do
 
     let postsPattern = "posts/*" .&&. complement (fromList drafts)
-    
+
     match "images/*" $ do
         route   idRoute
         compile copyFileCompiler
@@ -78,7 +79,7 @@ main = map fromString . lines <$> readFile "DRAFTS" >>= \drafts -> hakyll $ do
 
 
 writerOptions = defaultHakyllWriterOptions
-                { writerExtensions = S.delete Ext_literate_haskell 
+                { writerExtensions = S.delete Ext_literate_haskell
                   (writerExtensions defaultHakyllWriterOptions)
                 }
 
@@ -87,19 +88,19 @@ pandocCompiler' = pandocCompilerWith defaultHakyllReaderOptions writerOptions
 --------------------------------------------------------------------------------
 postCtx :: Context String
 postCtx =
-    dateField "date" "%B %e, %Y" 
+    dateField "date" "%B %e, %Y"
                   <> boolField "isLhs" (endsWith "lhs" . toFilePath . itemIdentifier)
                   <> pathField "fpath"
                   <> teaserField "teaser" "content"
                   <> defaultContext
 
-endsWith s = (s ==) . reverse . take (length s) . reverse 
+endsWith s = (s ==) . reverse . take (length s) . reverse
 
 
 
 applyPathMangledClass :: Item String -> Compiler (Item String)
 applyPathMangledClass item = return $ fmap (withTags procImg) item
-    where 
+    where
       procImg (TS.TagOpen s a) | s == "img" = TS.TagOpen s .
                                               procAttrs . M.fromList $ a
       procImg t = t
