@@ -282,75 +282,58 @@ last value the minimum time length, an eighth note.
 Elaboration: Braids for Counterpoint
 ====
 
-With the single strand, braid crossing rules indicate how other
-strands might interact with the source strand. To fill an entire braid
-however requires a generation algorithm. The approach taken is to
-generate one "column" at a time, starting with the first "step" of the
-braid and moving forward.
+Strands in a braid present an opportunity for musical polyphony.
+The creation of the strand is indeed enough to make an entire braid, with
+the other strands simply crossing as instructed by the single strand. This
+would not make for interesting accompanying parts, just long tones with
+infrequent, single-index pitch changes. In Pleonid, braids are further
+elaborated using a "terracing" strategy, vertically inverting and reflecting the source strand material.
 
-Within a given column, generation proceeds from
-the step's row upwards, simply iterating a fixed order of "weaves"
-(`DOWN_UNDER`, `UP_OVER`, `FLAT`, `DOWN_OVER`, `UP_UNDER`), starting from
-the weave at the step. This
-produces a "terraced" effect of flat alternating with crosses; plus, the
-crosses switch "polarity" (`OVER` vs `UNDER`) for additional diversity.
+Each transition in the source strand is seen as a "column" or "step", being either
+UP, DOWN or FLAT; the cross type is identified as OVER or UNDER. Moving away vertically from
+the strand step, FLATs and crosses are alternated; when a cross is
+generated, it is "reflected" from the previous cross --  a DOWN becomes an UP
+and an OVER becomes an UNDER. The alternating flats and inverting crosses
+produces a visually "terraced" effect. At the vertical edges, duplicate FLATs are
+inserted if a cross would violate the braid boundary.
 
-This is then repeated downward from the step, with the terracing order
-reversed. In the original code, the downward generator loses the "polarity
-switch" effect (a bug); in the Haskell version this quirk is offered as an option.
+Notably, here too a "bug" was discovered in the original code, where the terracing
+procedure was slightly different when moving downward from the strand as opposed to upward.
+Again, the bugs inform the character of the piece, and the Haskell version reproduces the
+bug with a parameter to restore uniformity if desired.
 
-Finally, a "capping" rule is applied. Braids cannot have an upward cross
-from the top position, nor a downward cross from the bottom, so these
-are coverted to `FLAT`.
-
-![Filling a braid from a single strand. The "terraced" generator results are shown on odd columns only, to illustrate the columnar algorithm.](figures/pleonid/strand_tcol_01__small.png)
+![Elaborating a braid. The "terracing" result is shown on every-other step to illustrate the columnar approach.](figures/pleonid/strand_tcol_01__small.png)
 
 ![The resulting braid.](figures/pleonid/braid_strands_01-11x6__small.png)
 
-Thus the full braids are generated. Each strand generated is a different
-motif, but within the same scale, and lasting the same amount of time, as the source strand.
-
-Braid "sequences"
+Braid Loops
 -----------------
 
-An key feature of braids is the representation of a *loop* within a
-knot, where a strand "loops back" to make a different cross, potentially with itself
-or a distinct strand.
+While a braid appears to have as many strands as Y-indexes, the strands actually
+"loop" onto each other any time they terminate at a different position than they started.
+This is an important feature for knot representations, as a complex braid might describe
+only a single loop!
 
-In a braid, a loop is indicated by a strand ending on a different y-position than
-where it starts. This "extends" the strand to the beginning of the strand starting at the end
-position. This continues until a strand's ending position points back at the first strand's
-starting position. ^[The well-formed-ness of braids is a fascinating topic in math,
-with braids forming a formal group with an identity and an inverse operation. See <http://en.wikipedia.org/wiki/Braid_group>.]
+![Braid loops, color-coded: this braid has 7 strands but only 3 loops.](figures/pleonid/braid_seqs_13-20x7.png)
 
-Since "loop" has a different connotation in music, I call these longer,
-joined strands *sequences*. Sequences can consume every strand in a braid,
-or a braid can have two or three sequences, or just one-strand sequences
-with no loops.
+Loops have compelling musical properties, as interpreted in Pleonid: a loop length will always
+be a multiple of the "braid length" or number of steps. If the braid length is seen as a "bar",
+single-strand loops will repeat every bar, while 2-loops will only repeat every two bars, and so forth,
+creating easily recognizable temporal interplay between parts. Indeed in Pleonid loops, not strands,
+are assigned to parts, so a braid of the same "height" often results in different polyphony.
 
+![Braid loops realized. The first staff is a 4-bar phrase, the second 1-bar, the third 2-bar.](figures/pleonid/braid-13.png)
 
-!["Sequences" of a braid.](figures/pleonid/braid_seqs_13-20x7.png)
-
-In the figure, the strand starting at index 10 ends at index 9, thus
-looping to the strand at index 9. This strand ends at 10 completing
-the loop as a two-strand sequence. The strand at 8 ends at 8, so it
-is a one-strand sequence. Finally, the strands at 6, 0, 5 and 1 join
-as a 4-strand sequence.
-
-Sequences add an interesting "metric" dimension to braids. While
-sequences are potentially of different length, they will always be a multiple
-of the strand length. This creates "multi-bar" longer motives, with the shorter motives repeating at the "bar" interval.
-
-![Braid sequences realized.](figures/pleonid/braid-13.png)
-
-The figure shows a realization of the three sequences from the braid
-above, transposed a 10th apart from each other. The 4-sequence is on the
-top staff, lasting 4 bars. The 1-sequence in the middle repeates 4 times,
-while the 2-seauence on the bottom staff repeats twice.
-
+In the figure, the braid loops shown above are orchestrated for three parts, using a 10-semitone register divide.
+The top staff has the longest loop, lasting the full 4 bars. The second staff has the shortest loop, repeating a
+one-bar figure 4 times. The third staff has a 2-bar figure, repeated twice.
 
 Braid Chords
 ============
+
+The 31 melodic figures, or "lines", have created 31 braids. The final generative procedure
+analyzes the
+
 
 
 
