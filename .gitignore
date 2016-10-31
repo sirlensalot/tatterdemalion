@@ -5,3 +5,4 @@ cabal.sandbox.config
 dist
 tags
 dist-newstyle
+.stack-work

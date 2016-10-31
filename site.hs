@@ -17,7 +17,7 @@ import Data.String
 main :: IO ()
 main = map fromString . lines <$> readFile "DRAFTS" >>= \drafts -> hakyll $ do
 
-    let postsPattern = "posts/*.lhs" .&&. complement (fromList drafts)
+    let postsPattern = "posts/*.*" .&&. complement (fromList drafts)
 
     match "images/*" $ do
         route   idRoute

@@ -67,16 +67,49 @@ h2 {
 	font-size: 90%;
 }
 
+table {
+    width: 100%;
+    margin-top: 1em;
+    margin-bottom: 1em;
+}
+
+table > h1 {
+    border-top: none;
+}
+
+td, th {
+    padding: 0.2em 0.7em;
+    vertical-align: top;
+}
+
+tr.header > td, th {
+    border-top: 1px solid #222;
+    border-bottom: 1px solid #222;
+    font-weight: 700;
+}
+
+tr.odd > td, th  {
+    background-color: #FAFAFA;
+}
+
+tr.even > td, th  {
+    background-color: #EAEAEA;
+}
+
+tbody:last-child {
+    border-bottom: 1px solid #222;
+}
+
 
 
 /* mobile: 21em */
-@media all and (min-width: 21em) { 
-	
+@media all and (min-width: 21em) {
+
 	pre {
 		font-size: 75%;
 		margin-left: 0px;
 	}
-	
+
 	p code {
 		font-size: 85%;
 	}

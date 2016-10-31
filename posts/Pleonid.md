@@ -45,7 +45,7 @@ a single pitch sequence as input to get started.
 ![Seed melody of *Pleonid*.](figures/pleonid/01-seed__small.png)
 
 The pitch-class set of the source melody is determined. In Pleonid this is `[0,2,3,4,5,7]`,
-Forte no. [6-8](https://en.wikipedia.org/wiki/List_of_pitch_class_sets)).
+Forte no. [6-8](https://en.wikipedia.org/wiki/List_of_pitch_class_sets).
 However this is not used for pitch-set transformations but as a concrete scale.
 
 ![Pitch class set and main scale.](figures/pleonid/01a-seedScale__small.png)
@@ -146,10 +146,10 @@ for instance dyads having intervals larger than 1/2 the gamut size are
 ![Steering [2,1,2,2] in a 10-gamut.](figures/pleonid/05-pleoSteering3.png)
 
 The last tuple of the second steering illustrates gamut-wrapping.
-The rotation of the interval is `[2,2,1,2]` puts the last
+The rotation of the interval `[2,2,1,2]` puts the last
 `B` above the gamut boundary of `Bb`; modulo wrapping results in a `C#`.
 This illustrates how non-standard gamuts create melodic interest: in a 12-gamut,
-wrapping notes above the gamut result in the same chroma with different pitch-height;
+wrapping notes above the gamut result in the same chroma;
 here, having a `C#` instead of a `B` adds new pitch
 information to the composition.
 
@@ -165,9 +165,9 @@ original material. The attempt to recover and amplify this relationship
 starts by filtering out sequences that do not have at least one steering chord
 composed entirely of seed-scale pitches.
 
-From the 5-tuple example above, the second steering `[0,2,3,5,7],[4,6,8,9,1]` is allowed,
+From the 5-tuple example above, the second steering `([0,2,3,5,7],[4,6,8,9,1])` is allowed,
 since the first tuple is made from intervals contained in the `[0,2,3,4,5,7]` seed scale.
-However, the first steering `[0,1,3,5,7],[2,4,6,8,9]` is discarded, since both tuples
+However, the first steering `([0,1,3,5,7],[2,4,6,8,9])` is discarded, since both tuples
 have intervals  outside of the seed scale.
 
 This filter reduces the 49 steerings to 32. The tuples then undergo
@@ -237,7 +237,9 @@ and the y-axis *indexing* pitch degrees from some pitchset.
 The polarity of a cross -- whether a strand passes over or under another strand -- is used
 to decide when a strand sounds a particular pitch. An over-cross or flat cross sounds the indexed
 pitch, whereas an under-cross continues the pitch started in a previous cross. Under-crosses at the
-beginning of a strand are removed. For instance, in the braid above, the strand starting at `10` begins
+beginning of a strand are removed.^[Handling of initial under-crosses is perhaps a bug, as by removing
+them, the rhythmic projection is distorted. A parameter in the Haskell code now governs whether to remove
+or convert to an initial rest.] For instance, in the braid above, the strand starting at `10` begins
 with an over cross, sounding the pitch `10` through the following 4 under-crosses. It then over-crosses
 at `1`, and again at `5`, resulting in two new notes.
 
@@ -355,7 +357,7 @@ Pseudorandom behavior with a LFSR
 
 The construction of the piece is by pseudo-random selection of one of three section types, representing
 the three bodies of material generated: lines, chords, and braids. Preferring a parameterizable, deterministic and
-low-entropy solution, I use a [linear frequency shift register (LFSR)](https://en.wikipedia.org/wiki/Linear-feedback_shift_register) to produce a stream of on-off values. In Pleonid, this LFSR is parameterized with a bit length of 5 and tap
+low-entropy solution, I use a [linear feedback shift register (LFSR)](https://en.wikipedia.org/wiki/Linear-feedback_shift_register) to produce a stream of on-off values. In Pleonid, this LFSR is parameterized with a bit length of 5 and tap
 points of 2 and 4.
 
 ```{.haskell}
@@ -467,22 +469,14 @@ The Pleonid software accepts the following input parameters:
 
 Parameter             Description
 ----------            ------------
-`gamut`               Gamut pseudo-octave value, used in steerings
-`line`                Source pitch sequence
-`transposer`          Voicing/register function, in Pleonid set to offset
-                      by 10 semitones
-`scaleMapper`         Function to map steerings to scale pitches, parameterized
-                      to mimic bug in the original Java code or use new
-                      "fixed" version
-`filterRestsInBraids` When true, drop any initial "under" crosses, resulting in
-                      rhythmic disparities in the original codebase. False instead
-                      puts a rest in its place.
-`scaleSize`           A separate gamut value used in scale mapping, and in pitch-set
-                      discovery. Pleonid uses the standard 12-octave.
-`lfsr`                A parameterized LFSR object. Pleonid's is parameterized with
-                      5 slots with taps at 2 and 4
-`parts`               A list of part metadata, including names and clefs, also dictating
-                      the number of parts.
+`gamut`               Gamut pseudo-octave value, used in steerings.
+`line`                Source pitch sequence.
+`transposer`          Voicing/register function, in Pleonid set to offset by 10 semitones.
+`scaleMapper`         Function to map steerings to scale pitches, parameterized to mimic bug in the original Java code or use new "fixed" version.
+`filterRestsInBraids` When true, drop any initial "under" crosses, resulting in rhythmic disparities in the original codebase. False instead puts a rest in its place.
+`scaleSize`           A separate gamut value used in scale mapping, and in pitch-set discovery. Pleonid uses the standard 12-octave.
+`lfsr`                A parameterized LFSR object. Pleonid's is parameterized with 5 slots with taps at 2 and 4.
+`parts`               A list of part metadata, including names and clefs, also dictating the number of parts.
 
 
 Appendix B: Relevant open-source libraries by the author {#appendix-b}

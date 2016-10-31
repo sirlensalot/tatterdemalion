@@ -6,7 +6,7 @@ date: November 2014
 
 *Author's Note: this article is the first of a series introducing Haskell
 to experienced programmers, building up language fundamentals, and unlearning
-assumptions from the imperative world.* 
+assumptions from the imperative world.*
 
 In this article, we'll take a close look at functions, namely how we
 call them -- function *application* -- and how we define them.
@@ -15,7 +15,7 @@ Function application seems like a paltry subject. Indeed, in
 imperative languages it's pretty simple. C++ can get hairy regarding
 copy-construction on return values, Java manages to confuse some folks
 regarding pass-by-value, but in general, it's `foo(bar,baz)` and
-that's it. 
+that's it.
 
 In Haskell, it gets considerably more interesting. This article will
 try to illustrate some of the surprising things that arise from
@@ -29,7 +29,7 @@ Variables vs Functions in Imperative Languages
 
 Consider the following two statements in Java or C:
 
-~~~~java 
+~~~~java
 int x = 1;
 int y() { return 1; }
 ~~~~
@@ -42,21 +42,21 @@ x + 4 == y() + 4 == 5;  // addition
 int[] a = {1,2,3};
 a[x] == a[y()] == 2;    // list-index
 x == y() == 1;          // equality
-~~~~ 
+~~~~
 
 `y()` cannot be redefined in runtime, but `x` can be *re-assigned*. If
 somewhere before or during the comparisons above, we write
 
 ~~~~java
 x = 3;
-~~~~ 
+~~~~
 
-then the comparisons will return `false` (`0` in C), or worse (the array 
+then the comparisons will return `false` (`0` in C), or worse (the array
 index will be particularly ugly). Re-assignment means behavior is dictated
 by the order in which these statements are written, hence the term "imperative".
 
 Replacing Variables with Function Calls
---------------------------------------- 
+---------------------------------------
 
 Using functions instead of variables offers some interesting advantages:
 
@@ -79,7 +79,7 @@ functions instead of addressing variables. We will simply note that
 there are positive implications that come from the pure functional
 approach: for one example, pure code allows for *automatic
 memoization* by the runtime, since a pure function always behaves the
-same given the same inputs. 
+same given the same inputs.
 
 Regardless, even if we want to go all-functions in our imperative
 code, we're going to hit some roadblocks. First, we'd *lose local
@@ -95,17 +95,17 @@ Eager vs Lazy evaluation
 In the code below, we call `add5` with `y()`. What happens?
 
 ~~~~java
-int y() { return 2; } 
+int y() { return 2; }
 
 int add5(int i) { return i + 5; }
 
 void callAFunction () {
-    add5 ( y() ); 
+    add5 ( y() );
 }
 ~~~~
 
 When the call to `add5` is executed, the function `y()` is *evaluated
-eagerly* and assigned to the argument variable `i`. Thus within the body 
+eagerly* and assigned to the argument variable `i`. Thus within the body
 of `add5`, our nullary function is long gone. We're back to variables and
 assignment as soon as we invoke a function.
 
@@ -113,7 +113,7 @@ If we wanted to preserve our immutable, pure semantics, we'd need the
 compiler to "weave in" the actual definition of `y()` into the code of
 `add5`. In other words, when we call functions, we want to
 *substitute* our function invocation wherever the argument is
-referenced. 
+referenced.
 
 This substitution has an interesting consequence, which is that
 *immediate evaluation of `y()` is no longer necessary* to invoke
@@ -126,7 +126,7 @@ code.
 
 Lazy evaluation can be tricky to reason about, but it offers
 interesting advantages, in that un-needed code branches don't have to
-be optimized away by the compiler: they are simply never executed. 
+be optimized away by the compiler: they are simply never executed.
 
 So we have to throw in the towel on functionalizing our imperative
 languages. But we've learned what we want to see in another language
@@ -154,7 +154,7 @@ nullary function above -- `int x() { return 1; }`.
 In truth, it's neither: this is a definition that binds the symbol `x`
 to a constant value `1`. Formally, it's a *closed expression*, not a
 function. Nonetheless, it gives us everything we were looking for with
-our nullary functions above: 
+our nullary functions above:
 
 * we can use it anywhere we like, independent of where/when we declared it
 
@@ -162,7 +162,7 @@ our nullary functions above:
 
 * We can change how we arrive at its value, e.g. `x = 2 + 3 - 4`, without impacting client code.
 
-Informally, we can think of this as a nullary function, and for 
+Informally, we can think of this as a nullary function, and for
 imperative programmers, this can be helpful, to "unlearn" our instincts to
 see an expression like `x = 1` as variable assignment. As we'll see
 below, "real" functions with arguments are defined using the same syntax, so
@@ -186,8 +186,7 @@ itself.
 Let's use the Haskell interpreter to see what type `x` is. If you have
 ghci, the Haskell REPL, up and running, you can issue `let x = 1` to
 follow along. Alternately, you can [download the
-source](https://raw.githubusercontent.com/slpopejoy/tatterdemalion/master/haskell/FunctionApplicationDefinition.lhs
-"Article source") of this article, which is "literate haskell" and
+source](https://raw.githubusercontent.com/slpopejoy/tatterdemalion/master/posts/2014-11-27-FunctionApplicationDefinition.lhs) of this article, which is "literate haskell" and
 therefore can be loaded up in your interpreter with the ":load"
 command, and just reference `x` directly.
 
@@ -229,7 +228,7 @@ When the time comes to use these expressions, Haskell offers a
 much cleaner syntax, with no parentheses required. Below
 are the Haskell versions of our imperative code above:
 
-> someTests = ( 
+> someTests = (
 >              (x + 3) == 4,         -- addition
 >              ([1,2,3] !! x) == 2,  -- list-index
 >              x /= y                -- (in)equality
@@ -243,23 +242,23 @@ The reader can figure out the type as an exercise, or ask ghci.
 Local Scope
 -----------
 
-We talked about how nice it would be to declare functions in local scope. In 
-Haskell we have all the same tools for local definition as we do at top level: 
+We talked about how nice it would be to declare functions in local scope. In
+Haskell we have all the same tools for local definition as we do at top level:
 
 > localWithWhere = y * 30 + y ^ 2
 >                  where y = 3
 
 Here, we've defined `y` to be used twice in the outer function body.
-The `where` [keyword](http://www.haskell.org/haskellwiki/Keywords#where "Keywords: where") 
-starts a block of code for definitions in local scope. 
+The `where` [keyword](http://www.haskell.org/haskellwiki/Keywords#where)
+starts a block of code for definitions in local scope.
 
 Note that this article's code has already defined of `y` at the top level, above.
 Haskell allows definitions with the same name in local scope, which will
 override the top-level definition. This is called *shadowing* the top-level definition.
 
-You can also use ["let" and "in"](http://www.haskell.org/haskellwiki/Keywords#let "Keywords: let"):
+You can also use ["let" and "in"](http://www.haskell.org/haskellwiki/Keywords#let):
 
-> localWithLet = let y = 3 
+> localWithLet = let y = 3
 >                in y * 30 + y ^ 2
 
 This is more familiar to the imperative idiom, in that something that
@@ -272,7 +271,7 @@ followed by details; `let`/`in` is maybe clearer in some situations.
 Local definitions can have type signatures, too:
 
 > localWithTypeDecl :: Int
-> localWithTypeDecl = y * 30 + y ^ 2 
+> localWithTypeDecl = y * 30 + y ^ 2
 >                     where y :: Int
 >                           y = 3
 
@@ -307,15 +306,14 @@ to output, we can imagine the argument "indexing" the output. Indeed
 `Int -> Int` even looks like mapping syntax from languages like
 Perl. The arrow dividing the argument from the result type is the
 *[function type
-constructor](http://www.haskell.org/haskellwiki/Keywords#-.3E
-"Keywords: ->")*, which we'll be seeing a lot.
+constructor](http://www.haskell.org/haskellwiki/Keywords#-.3E)*, which we'll be seeing a lot.
 
 A binary (two-argument) function can also be thought of as a mapping
 or indexing operation, but in two dimensions. Here's a binary
 function:
 
 > binaryFunction :: Int -> Int -> Int
-> binaryFunction x y = x * y + x 
+> binaryFunction x y = x * y + x
 
 This is when the type signatures stop looking like anything you've
 seen in an imperative language. The type signature is growing to the
@@ -327,7 +325,7 @@ an example with different types to make the positions clearer:
 
 This function takes a `String` and an `Int` and returns a `Bool`,
 `True` if the length of the string is divisible by the second
-argument. 
+argument.
 
 Let's compare the signatures so far:
 
@@ -339,12 +337,12 @@ binaryFunction :: Int -> Int -> Int
 
 Note the consistency and simplicity. It's admirable, beautiful, maybe
 confusing at first. But it's no accident that the syntax is unified,
-as we'll soon see. 
+as we'll soon see.
 
 Invoking functions with arguments
 ---------------------------------
 
-To invoke functions, we simply delimit argument values with whitespace. 
+To invoke functions, we simply delimit argument values with whitespace.
 
 > invokeUnary = unaryFunction 8     -- will compute 8 * 3 + 2
 > invokeBinary = binaryFunction 2 3 -- will compute 2 * 3 + 2
@@ -358,7 +356,7 @@ other functions, we'll need some more syntax. Let's try calling
 binaryFunction 2 unaryFunction 3  <=== bzzt
 ```
 
-This doesn't work: the compiler can't distinguish what's an argument 
+This doesn't work: the compiler can't distinguish what's an argument
 from what's a function invocation. We'll need to clear things up
 with parentheses.
 
@@ -366,7 +364,7 @@ with parentheses.
 
 That's better. Evaluation looks straightforward: compute
 `unaryFunction 3` and pass the results as the second argument for
-`binaryFunction 2`, right? Not so fast! 
+`binaryFunction 2`, right? Not so fast!
 
 Recall our discussion of *eager evaluation* above, and how we wanted
 to avoid assigning variables by *substituting the function call in for
@@ -386,7 +384,7 @@ The Application Operator
 
 Parentheses are not the only way to delimit function
 arguments. Haskell also has `$`, the *[application
-operator](http://hackage.haskell.org/package/base-4.7.0.1/docs/Prelude.html#v:-36-"Prelude")*.
+operator](http://hackage.haskell.org/package/base-4.7.0.1/docs/Prelude.html#v:-36-)*.
 Here's how we can write the code above without parentheses:
 
 > invokeAppOp = binaryFunction 2 $ unaryFunction 3
@@ -394,7 +392,7 @@ Here's how we can write the code above without parentheses:
 This looks nice. Everything after the `$` is "bunched together" as the
 second argument to `binaryFunction`. It has the same meaning as
 `binaryFunction 2 (unaryFunction 3)` but with a sweet functional
-look. 
+look.
 
 We could leave it at that, and marvel at Haskell's flexible syntax.
 But let's look deeper. A common mistake is to think that `$` is a
@@ -491,7 +489,7 @@ ghci> intAddPartial 3
 Partial application shows up in many functional-ish languages, but
 it's often presented as "something special", distinct from everyday
 function use. For instance, in Clojure, we have to use the `partial`
-function to do so, which is similar to other LISPy languages. 
+function to do so, which is similar to other LISPy languages.
 
 In Haskell, partial application is fundamental. When we said there was
 more to those elegant type signatures than good looks, this is what we
@@ -552,8 +550,7 @@ be written entirely with parentheses to make this clear:
 > invokePartialParens = (binaryFunction 2) (unaryFunction 3)
 
 And indeed, the definition of `($)` is nothing but [function application
-itself](http://hackage.haskell.org/package/base-4.7.0.1/docs/src/GHC-Base.html#%24
-"GHC/Base.lhs"):
+itself](http://hackage.haskell.org/package/base-4.7.0.1/docs/src/GHC-Base.html#%24):
 
 ~~~~haskell
     ($)             :: (a -> b) -> a -> b
@@ -679,7 +676,7 @@ Function application happens one argument at a time: each argument
 when applied creates a new function which is then applied to the next
 argument. A function applied to less arguments than specified in its
 definition is *partially applied*, resulting in a new function with
-however many arguments are left. 
+however many arguments are left.
 
 Because Haskell is a *lazy* language, there is no difference between a
 fully- or partially-applied function: a fully-applied function is not
@@ -706,10 +703,3 @@ such", meaning we can assign other names to them. As a result, we do
 not have to restate the arguments, and can elide them from our
 function definitions, a process called "eta reduction", or "point-free
 style".
-
-
-
-
-
-
-
