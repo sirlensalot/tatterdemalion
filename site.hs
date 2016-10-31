@@ -17,7 +17,7 @@ import Data.String
 main :: IO ()
 main = map fromString . lines <$> readFile "DRAFTS" >>= \drafts -> hakyll $ do
 
-    let postsPattern = "posts/*" .&&. complement (fromList drafts)
+    let postsPattern = "posts/*.lhs" .&&. complement (fromList drafts)
 
     match "images/*" $ do
         route   idRoute
@@ -39,7 +39,7 @@ main = map fromString . lines <$> readFile "DRAFTS" >>= \drafts -> hakyll $ do
 
     match "posts/*" $ do
         route $ setExtension "html"
-        compile $ pandocCompiler'
+        compile $ lhsCompiler
             >>= saveSnapshot "content"
             >>= loadAndApplyTemplate "templates/post.html"    postCtx
             >>= loadAndApplyTemplate "templates/default.html" postCtx
@@ -83,7 +83,7 @@ writerOptions = defaultHakyllWriterOptions
                   (writerExtensions defaultHakyllWriterOptions)
                 }
 
-pandocCompiler' = pandocCompilerWith defaultHakyllReaderOptions writerOptions
+lhsCompiler = pandocCompilerWith defaultHakyllReaderOptions writerOptions
 
 --------------------------------------------------------------------------------
 postCtx :: Context String

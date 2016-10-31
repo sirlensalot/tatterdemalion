@@ -4,3 +4,4 @@ _site
 cabal.sandbox.config
 dist
 tags
+dist-newstyle
